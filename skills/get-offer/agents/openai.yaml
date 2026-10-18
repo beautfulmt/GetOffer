@@ -1,0 +1,6 @@
+interface:
+  display_name: "GetOffer 校招求职助手"
+  short_description: "从真实经历出发写改简历、按岗位定制、准备面试，并逐题复盘后更新求职材料"
+  default_prompt: "用 $get-offer 帮我处理当前的简历或面试任务，复用已确认的经历，给出具体改法。"
+policy:
+  allow_implicit_invocation: true
