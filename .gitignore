@@ -1,3 +1,4 @@
+# Local development and generated material
 .DS_Store
 __pycache__/
 *.py[cod]
@@ -5,9 +6,12 @@ __pycache__/
 venv/
 .env
 .env.*
+/tests/
 /get-offer/
 /get-offer-data/
 /profile.md
+/progress.md
+/materials.md
 /resumes/
 /jd/
 /prep/
