@@ -22,9 +22,9 @@
 
 可用 HTML 打印时，复用[墨蓝商务 HTML 模板](../assets/resume-navy.html)的样式。填充姓名、目标岗位、信息行、栏目块及可选演练标记；无内容的元素删除，所有占位符必须替换。原始资料先转义为文本，只用自己生成的已知 HTML 结构组织内容。
 
-模板占位符：`{{name}}`、`{{target_role}}`、`{{meta_lines}}`、`{{sections}}`、`{{sample_notice}}`，以及写入 PDF 标题元数据的 `{{document_title}}`。模板底部有一段填好的示意结构，照它的嵌套方式生成 `{{sections}}`；正式投递稿删除 `{{sample_notice}}`。英文简历把 `lang` 改为 `en`。
+模板占位符：`{{name}}`、`{{target_role}}`、`{{meta_lines}}`、`{{sections}}`、`{{sample_notice}}`，以及写入 PDF 标题元数据的 `{{document_title}}`。每个占位符在模板中只出现一次，填充后检查不再残留 `{{`。模板底部注释里有填好的示意结构，照它的嵌套方式生成 `{{sections}}`；正式投递稿删除 `{{sample_notice}}`。英文简历把 `lang` 改为 `en`。
 
-模板栏目使用 `.resume-section`，条目使用 `.entry`，条目头使用 `.entry-head`、`.entry-title` 和 `.entry-date`；任职内的实际岗位用 `.entry-role`，教育补充信息用 `.education-detail`，职责概括用 `.scope`，项目分组用 `.project` 和 `.project-title`，要点用 `.points`，主题标签用 `.theme` 加粗，技能段落用 `.skills`，演练虚构提示用 `.sample-notice`。正文结构按[经历组织规则](resume-structure.md)选择，不能把三个示意结构都复制进成品。
+模板栏目使用 `.resume-section`，条目使用 `.entry`，条目头使用 `.entry-head`、`.entry-title` 和 `.entry-date`；任职内的实际岗位用 `.entry-role`，教育补充信息用 `.education-detail`，职责概括用 `.scope`，项目分组用 `.project` 和 `.project-title`，要点用 `.points`，主题标签用 `.theme` 加粗，技能段落用 `.skills`，演练虚构提示用 `.sample-notice`。示意中的实习条目对应“复杂任职精选项目”，项目条目对应“直接分条”；正文结构按[经历组织规则](resume-structure.md)选择，不把示意条目整体复制进成品。
 
 宿主采用其他 PDF 或 DOCX 工具时，将同样的颜色、字体层级、间距及日期对齐落实为段落样式与制表位；不要只给默认 Markdown 导出换个蓝色标题。DOCX 正文须可编辑，与 PDF 之间允许合理换行差异。
 
