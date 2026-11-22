@@ -152,12 +152,16 @@
               <h5>好在哪</h5><ul class="keep-list"><li>具体做法</li></ul>
               <h5>问题在哪</h5><ol class="fix-list"><li><span class="n">1</span> 缺什么、为什么影响判断</li><li><span class="n">2</span> …</li></ol>
               <div class="better"><h5>改进后的答法</h5><p>可以直接说出口的完整回答，含对追问的回答。</p></div>
-              <h5>改了什么</h5><ol class="changes"><li><span class="n">1</span> 原来怎么说 → 现在怎么说，为什么</li></ol>
+              <h5>改了什么</h5><ol class="changes"><li><span class="n">1</span> 「左栏 1 号标记的原话」→「改进答法里对应的新说法」：为什么这样改</li></ol>
               <p class="practice"><strong>下次怎么练：</strong>一个练习动作或可能的追问</p>
             </section>
           </div>
         </div>
       </details>
+    反问环节（提问的人是候选人）：
+      <div class="turn"><p class="who">你</p><p>候选人的提问原话</p></div>
+      <div class="turn ask"><p class="who">面试官回应</p><p>面试官的回答（整理）</p></div>
+      右栏“改进后的答法”只写更好的提问本身，不夹带标签或面试官的话。
     closing：
       <h2>下一轮怎么准备</h2><section class="panel">…</section>
       <h2>可以写进简历的新素材</h2><table><tr><th>来源题号与原话</th><th>对应经历</th><th>候选改写</th><th>确认状态</th></tr>…</table>
@@ -170,6 +174,14 @@
     {{closing}}
   </main>
   <script>
+    function openTarget() {
+      var id = decodeURIComponent(location.hash.slice(1));
+      var el = id && document.getElementById(id);
+      var card = el && el.closest("details");
+      if (card) { card.open = true; el.scrollIntoView(); }
+    }
+    window.addEventListener("hashchange", openTarget);
+    window.addEventListener("DOMContentLoaded", openTarget);
     window.addEventListener("beforeprint", function () {
       document.querySelectorAll("details").forEach(function (d) { d.open = true; });
     });
