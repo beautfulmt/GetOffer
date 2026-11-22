@@ -43,9 +43,13 @@
     .meta { margin-top: 10px; color: var(--muted); font-size: 13px; }
     .meta p { margin: 0 0 2px; }
     .panel { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 20px; }
-    .verdict { font-size: 17px; font-weight: 600; margin-bottom: 14px; }
-    .overview-grid { display: grid; gap: 16px; grid-template-columns: 1fr 1fr; }
-    .label-summary { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 6px; }
+    .verdict { font-size: 17px; font-weight: 600; margin-bottom: 12px; }
+    .label-summary { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+    .overview-grid { display: grid; gap: 16px; grid-template-columns: 1fr 1fr; margin-bottom: 8px; }
+    .overview-grid > div { padding: 12px 14px; border-radius: 8px; }
+    .overview-grid .strengths { background: var(--good-bg); }
+    .overview-grid .issues { background: var(--redo-bg); }
+    .overview-grid h4 { color: var(--ink); }
     .chip {
       display: inline-block; padding: 1px 10px; border-radius: 999px;
       font-size: 13px; font-weight: 600; white-space: nowrap;
@@ -53,23 +57,34 @@
     .chip.good { color: var(--good); background: var(--good-bg); }
     .chip.improve { color: var(--improve); background: var(--improve-bg); }
     .chip.redo { color: var(--redo); background: var(--redo-bg); }
+    .chip.small { padding: 0 7px; font-size: 12px; font-weight: 500; }
     .priority li { margin: 4px 0; }
     .qcard {
       background: var(--paper); border: 1px solid var(--line); border-left: 5px solid var(--line);
-      border-radius: 10px; padding: 18px 20px; margin: 0 0 16px;
+      border-radius: 10px; margin: 0 0 14px;
     }
     .qcard.good { border-left-color: var(--good); }
     .qcard.improve { border-left-color: var(--improve); }
     .qcard.redo { border-left-color: var(--redo); }
-    .q-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; }
+    .q-head {
+      display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px;
+      padding: 16px 20px; cursor: pointer; list-style: none;
+    }
+    .q-head::-webkit-details-marker { display: none; }
+    .q-head::after { content: "展开"; margin-left: auto; color: var(--muted); font-size: 12px; }
+    .qcard[open] > .q-head::after { content: "收起"; }
     .q-no { color: var(--navy); font-weight: 700; }
     .q-time { color: var(--muted); font-size: 13px; }
     .q-head h3 { flex: 1 1 320px; min-width: 0; }
-    .q-focus { margin: 10px 0 14px; padding: 8px 12px; background: var(--bg); border-radius: 8px; font-size: 14px; }
+    .q-inner { padding: 0 20px 18px; }
+    .q-focus { margin: 0 0 14px; padding: 8px 12px; background: var(--bg); border-radius: 8px; font-size: 14px; }
     .q-focus strong { color: var(--navy); }
     .q-focus ul { margin: 2px 0 0; }
     .q-body { display: grid; gap: 20px; grid-template-columns: 1fr 1fr; }
-    .q-answer blockquote { margin: 0; padding: 0 0 0 12px; border-left: 3px solid var(--line); color: #33373D; }
+    .turn { margin: 0 0 10px; padding-left: 12px; border-left: 3px solid var(--line); }
+    .turn.ask { border-left-color: var(--navy); background: var(--bg); padding: 6px 10px 2px 12px; border-radius: 0 6px 6px 0; }
+    .turn .who { margin: 0 0 2px; color: var(--muted); font-size: 12px; font-weight: 600; }
+    .turn p { color: #33373D; }
     mark { padding: 0 2px; border-radius: 3px; color: inherit; }
     mark.keep { background: var(--good-bg); box-shadow: inset 0 -2px 0 var(--good); }
     mark.fix { background: var(--redo-bg); box-shadow: inset 0 -2px 0 var(--redo); }
@@ -79,14 +94,12 @@
       text-align: center; vertical-align: 2px; font-weight: 700;
     }
     .q-advice .keep-list li::marker { color: var(--good); }
-    .q-advice .fix-list { list-style: none; padding-left: 0; }
-    .q-advice .fix-list li { margin: 6px 0; }
+    .q-advice .fix-list, .q-advice .changes { list-style: none; padding-left: 0; }
+    .q-advice .fix-list li, .q-advice .changes li { margin: 6px 0; }
     .better { margin-top: 12px; padding: 12px 14px; background: var(--better-bg); border-radius: 8px; }
     .better h5 { margin-top: 0; color: var(--navy); }
     .changes, .practice { font-size: 14px; }
     .practice { margin-top: 10px; color: #33373D; }
-    .followups { margin-top: 16px; padding-left: 14px; border-left: 2px dashed var(--line); }
-    .followups .qcard { margin-bottom: 12px; }
     table { width: 100%; border-collapse: collapse; background: var(--paper); font-size: 14px; }
     th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
     th { background: var(--bg); }
@@ -94,12 +107,14 @@
     @media (max-width: 860px) {
       .overview-grid, .q-body { grid-template-columns: 1fr; }
       main { padding: 20px 12px 48px; }
+      .q-head, .q-inner { padding-left: 14px; padding-right: 14px; }
     }
     @media print {
       body { background: #fff; font-size: 12px; }
       main { max-width: none; padding: 0; }
       .qcard, .panel { break-inside: avoid; }
-      mark, .chip, .better, .q-focus { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .q-head::after { content: none; }
+      mark, .chip, .better, .q-focus, .overview-grid > div { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     }
   </style>
 </head>
@@ -107,40 +122,45 @@
   <main>
     <header class="report-header">{{header}}</header>
     <!-- 示例：按此嵌套生成下方各占位，正式报告删除本注释。所有原话先转义再加 mark。
-    header：
+    header（不写工具名或版本号）：
       <h1>公司 · 岗位 · 轮次 面试复盘</h1>
       <div class="meta"><p>日期｜材料来源（原音频自动转写、文字稿或回忆稿）｜评价基准</p></div>
-    overview：
+    overview（下面每一块都必须有）：
       <section class="panel">
         <p class="verdict">按业务一面的标准，一句话结论。</p>
-        <div class="label-summary"><span class="chip good">答得好 3</span><span class="chip improve">需补强 5</span><span class="chip redo">要重练 2</span></div>
+        <div class="label-summary"><span class="chip good">答得好 5</span><span class="chip improve">需补强 8</span><span class="chip redo">要重练 3</span></div>
         <div class="overview-grid">
-          <div><h4>最突出的优点</h4><ul><li>具体做法</li></ul></div>
-          <div><h4>最要害的问题</h4><ul><li>问题及对面试官判断的影响</li></ul></div>
+          <div class="strengths"><h4>最突出的优点</h4><ul><li>具体做法，附题号</li></ul></div>
+          <div class="issues"><h4>最要害的问题</h4><ul><li>问题及对面试官判断的影响，附题号</li></ul></div>
         </div>
-        <h4>先改这三题</h4><ol class="priority"><li><a href="#q05">Q05 温度参数</a>：一句话说明为什么先改</li></ol>
+        <h4>先改这三题</h4>
+        <ol class="priority"><li><a href="#q12">Q12 温度参数</a>：为什么先改这题</li></ol>
+        <p class="note">答得好的题默认收起，点题目展开。</p>
       </section>
-    questions（每题一张卡；追问放进同题的 followups，不与主问题合并）：
-      <article class="qcard improve" id="q03">
-        <div class="q-head"><span class="q-no">Q03</span><span class="q-time">05:59</span><h3>面试官的问题原文</h3><span class="chip improve">需补强</span></div>
-        <div class="q-focus"><strong>面试官想考察：</strong><ul><li>考察点一</li><li>考察点二</li></ul></div>
-        <div class="q-body">
-          <section class="q-answer"><h4>你的回答</h4>
-            <blockquote><p>原话，<mark class="keep">值得保留的部分</mark>，<mark class="fix">有问题的部分<sup>1</sup></mark>。</p></blockquote>
-          </section>
-          <section class="q-advice"><h4>怎么改</h4>
-            <h5>好在哪</h5><ul class="keep-list"><li>具体做法</li></ul>
-            <h5>问题在哪</h5><ol class="fix-list"><li><span class="n">1</span> 缺什么、为什么影响判断，对应左侧同号标记</li></ol>
-            <div class="better"><h5>改进后的答法</h5><p>可以直接说出口的完整回答。</p></div>
-            <h5>改了什么</h5><ul class="changes"><li>原来怎么说 → 现在怎么说，为什么（答得好的题写“还能更好的一处”）</li></ul>
-            <p class="practice"><strong>下次怎么练：</strong>一个练习动作或追问</p>
-          </section>
+    questions（一个主问题一张卡；追问写在左栏的对话里，换了话题才另起一张卡；答得好的卡去掉 open 默认收起）：
+      <details class="qcard improve" id="q03" open>
+        <summary class="q-head"><span class="q-no">Q03</span><span class="q-time">05:59</span><h3>面试官的问题原文</h3><span class="chip improve">需补强</span></summary>
+        <div class="q-inner">
+          <div class="q-focus"><strong>面试官想考察：</strong><ul><li>考察点一</li><li>考察点二</li></ul></div>
+          <div class="q-body">
+            <section class="q-answer"><h4>你的回答</h4>
+              <div class="turn"><p class="who">你</p><p>完整回答，<mark class="keep">值得保留的说法</mark>，<mark class="fix">有问题的说法<sup>1</sup></mark>。</p></div>
+              <div class="turn ask"><p class="who">追问 06:20</p><p>追问原文</p></div>
+              <div class="turn"><p class="who">你 <span class="chip small redo">要重练</span></p><p>对追问的回答，<mark class="fix">有问题的说法<sup>2</sup></mark>。</p></div>
+            </section>
+            <section class="q-advice"><h4>怎么改</h4>
+              <h5>好在哪</h5><ul class="keep-list"><li>具体做法</li></ul>
+              <h5>问题在哪</h5><ol class="fix-list"><li><span class="n">1</span> 缺什么、为什么影响判断</li><li><span class="n">2</span> …</li></ol>
+              <div class="better"><h5>改进后的答法</h5><p>可以直接说出口的完整回答，含对追问的回答。</p></div>
+              <h5>改了什么</h5><ol class="changes"><li><span class="n">1</span> 原来怎么说 → 现在怎么说，为什么</li></ol>
+              <p class="practice"><strong>下次怎么练：</strong>一个练习动作或可能的追问</p>
+            </section>
+          </div>
         </div>
-        <div class="followups">（追问同样用 qcard，编号如 Q03-1）</div>
-      </article>
+      </details>
     closing：
       <h2>下一轮怎么准备</h2><section class="panel">…</section>
-      <h2>可以写进简历的新素材</h2><table>…</table>
+      <h2>可以写进简历的新素材</h2><table><tr><th>来源题号与原话</th><th>对应经历</th><th>候选改写</th><th>确认状态</th></tr>…</table>
       <h2>材料与说明</h2><section class="panel note">…</section>
     -->
     <h2>整体评价</h2>
@@ -149,5 +169,10 @@
     {{questions}}
     {{closing}}
   </main>
+  <script>
+    window.addEventListener("beforeprint", function () {
+      document.querySelectorAll("details").forEach(function (d) { d.open = true; });
+    });
+  </script>
 </body>
 </html>
