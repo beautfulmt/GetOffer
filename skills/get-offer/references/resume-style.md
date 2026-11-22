@@ -24,7 +24,7 @@
 
 模板占位符：`{{name}}`、`{{target_role}}`、`{{meta_lines}}`、`{{sections}}`、`{{sample_notice}}`，以及写入 PDF 标题元数据的 `{{document_title}}`。每个占位符在模板中只出现一次，填充后检查不再残留 `{{`。模板底部注释里有填好的示意结构，照它的嵌套方式生成 `{{sections}}`；正式投递稿删除 `{{sample_notice}}`。英文简历把 `lang` 改为 `en`。
 
-模板栏目使用 `.resume-section`，条目使用 `.entry`，条目头使用 `.entry-head`、`.entry-title` 和 `.entry-date`；任职内的实际岗位用 `.entry-role`，教育补充信息用 `.education-detail`，职责概括用 `.scope`，项目分组用 `.project` 和 `.project-title`，要点用 `.points`，主题标签用 `.theme` 加粗，技能段落用 `.skills`，演练虚构提示用 `.sample-notice`。示意中的实习条目对应“复杂任职精选项目”，项目条目对应“直接分条”；正文结构按[经历组织规则](resume-structure.md)选择，不把示意条目整体复制进成品。
+模板栏目使用 `.resume-section`，条目使用 `.entry`，条目头使用 `.entry-head`、`.entry-title` 和 `.entry-date`；任职内的实际岗位用 `.entry-role`，教育补充信息用 `.education-detail`，职责概括用 `.scope`，项目分组用 `.project` 和 `.project-title`，要点用 `.points`，主题标签用 `.theme` 加粗，技能段落用 `.skills`，演练虚构提示用 `.sample-notice`，待补稿里的 `[待确认：……]` 空位用 `<span class="pending">` 包起来。示意中的实习条目对应“复杂任职精选项目”，项目条目对应“直接分条”；正文结构按[经历组织规则](resume-structure.md)选择，不把示意条目整体复制进成品。
 
 宿主采用其他 PDF 或 DOCX 工具时，将同样的颜色、字体层级、间距及日期对齐落实为段落样式与制表位；不要只给默认 Markdown 导出换个蓝色标题。DOCX 正文须可编辑，与 PDF 之间允许合理换行差异。
 
@@ -36,6 +36,6 @@
 
 - 姓名和长岗位是否相撞、长公司名是否挤到日期、要点续行是否对齐，以及中文字体、数字和标点。
 - 标题跟随下一段，单条要点尽量不跨页；较长任职可以在项目或要点之间分页，不能为保持整段同页制造大块空白。
-- 实际投递稿不含“墨蓝商务”等样式标签。演练稿保留清楚的虚构标记，不能误称真实投递版本。
+- 实际投递稿不含“墨蓝商务”等样式标签，也不含 `.pending` 空位。演练稿保留清楚的虚构标记，不能误称真实投递版本。
 
 检查通过后再交付。
