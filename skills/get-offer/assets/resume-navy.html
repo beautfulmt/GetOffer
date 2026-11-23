@@ -11,8 +11,8 @@
       --muted: #646B73;
       /* 标准间距。一页排不下时给 html 标签加 class="compact"，换成下面的紧凑间距；字号不变。 */
       --line: 15.6pt;
-      --gap-section: 14pt;
-      --gap-heading: 8pt;
+      --gap-section: 16pt;
+      --gap-heading: 7pt;
       --gap-entry: 10pt;
       --gap-block: 4pt;
       --gap-item: 3pt;
@@ -46,8 +46,8 @@
       background: white;
     }
     .resume-header {
-      padding-bottom: var(--gap-heading);
-      border-bottom: 1.1pt solid var(--navy);
+      padding-bottom: 10pt;
+      border-bottom: 2pt solid var(--navy);
     }
     .identity {
       display: flex;
@@ -59,36 +59,37 @@
     h1 {
       margin: 0;
       color: var(--navy);
-      font-size: 22pt;
+      font-size: 24pt;
       line-height: 1.25;
       font-weight: 600;
-      letter-spacing: .5pt;
+      letter-spacing: 1pt;
       overflow-wrap: anywhere;
     }
     .target-role {
       margin: 0;
       color: var(--navy);
-      font-size: 11.2pt;
+      font-size: 11.5pt;
       font-weight: 600;
+      letter-spacing: .4pt;
     }
     .meta { margin-top: var(--gap-block); }
     .meta p {
       margin: 0;
       color: var(--muted);
-      font-size: 9.2pt;
-      line-height: 14.5pt;
+      font-size: 9.4pt;
+      line-height: 15pt;
       overflow-wrap: anywhere;
     }
     .resume-section { margin-top: var(--gap-section); }
     h2 {
       margin: 0 0 var(--gap-heading);
-      padding-left: 8pt;
-      border-left: 2.3pt solid var(--navy);
+      padding: 0 0 2.5pt;
+      border-bottom: .6pt solid #D3D9E0;
       color: var(--navy);
-      font-size: 11.2pt;
+      font-size: 10.6pt;
       line-height: 13pt;
       font-weight: 600;
-      letter-spacing: .6pt;
+      letter-spacing: 2pt;
       break-after: avoid;
       page-break-after: avoid;
     }
@@ -107,7 +108,7 @@
       margin: 0;
       flex: 1 1 200pt;
       min-width: 0;
-      font-size: 10.6pt;
+      font-size: 11pt;
       line-height: 16pt;
       font-weight: 600;
       overflow-wrap: anywhere;
@@ -150,7 +151,8 @@
       widows: 2;
     }
     .points li:last-child { margin-bottom: 0; }
-    .points li::marker { color: var(--navy); font-size: 8pt; }
+    .points li::marker { content: "▪  "; color: var(--navy); font-size: 7pt; }
+    .entry-role { color: #55708C; }
     .theme { font-weight: 600; }
     .pending, .draft-note {
       color: #A8431B;
