@@ -103,6 +103,7 @@
     table { width: 100%; border-collapse: collapse; background: var(--paper); font-size: 14px; }
     th, td { border: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
     th { background: var(--bg); }
+    table + p { margin-top: 10px; }
     .note { color: var(--muted); font-size: 13px; }
     @media (max-width: 860px) {
       .overview-grid, .q-body { grid-template-columns: 1fr; }
@@ -121,47 +122,51 @@
 <body>
   <main>
     <header class="report-header">{{header}}</header>
-    <!-- 示例：按此嵌套生成下方各占位，正式报告删除本注释。所有原话先转义再加 mark。
-    header（不写工具名或版本号）：
-      <h1>公司 · 岗位 · 轮次 面试复盘</h1>
-      <div class="meta"><p>日期｜材料来源（原音频自动转写、文字稿或回忆稿）｜评价基准</p></div>
-    overview（下面每一块都必须有）：
+    <!-- 示例：按此嵌套生成下方各占位，正式报告删除本注释。原话先转义再加标记。
+    header（不写技能名或版本号）：
+      <h1>公司 · 岗位 · 轮次 面试复盘</h1>（模拟写“模拟面试点评”）
+      <div class="meta"><p>日期｜材料来源｜评价基准</p></div>
+    overview：
       <section class="panel">
         <p class="verdict">按业务一面的标准，一句话结论。</p>
-        <div class="label-summary"><span class="chip good">答得好 5</span><span class="chip improve">需补强 8</span><span class="chip redo">要重练 3</span></div>
+        <div class="label-summary"><span class="chip good">答得好 5</span><span class="chip improve">需补强 8</span><span class="chip redo">要重练 0</span></div>
         <div class="overview-grid">
-          <div class="strengths"><h4>最突出的优点</h4><ul><li>具体做法，附题号</li></ul></div>
-          <div class="issues"><h4>最要害的问题</h4><ul><li>问题及对面试官判断的影响，附题号</li></ul></div>
+          <div class="strengths"><h4>最突出的优点</h4><ul><li>具体做法（Q02）</li></ul></div>
+          <div class="issues"><h4>最要害的问题</h4><ul><li>问题及对判断的影响（Q03）</li></ul></div>
         </div>
         <h4>先改这三题</h4>
-        <ol class="priority"><li><a href="#q12">Q12 温度参数</a>：为什么先改这题</li></ol>
+        <ol class="priority"><li><a href="#q03">Q03 项目分工</a>：为什么先改</li></ol>
         <p class="note">答得好的题默认收起，点题目展开。</p>
       </section>
-    questions（一个主问题一张卡；追问写在左栏的对话里，换了话题才另起一张卡；答得好的卡去掉 open 默认收起）：
+      模拟点评在 panel 之后加：
+      <h2>覆盖情况</h2><table><tr><th>能力</th><th>类型</th><th>在哪题考到</th><th>表现</th></tr><tr><td>SQL</td><td>硬技能</td><td>未考到</td><td>未考到，未知</td></tr></table>
+    questions，需补强或要重练（带 open，展开）：
       <details class="qcard improve" id="q03" open>
-        <summary class="q-head"><span class="q-no">Q03</span><span class="q-time">05:59</span><h3>面试官的问题原文</h3><span class="chip improve">需补强</span></summary>
+        <summary class="q-head"><span class="q-no">Q03</span><span class="q-time">05:59</span><h3>问题原文</h3><span class="chip improve">需补强</span></summary>
         <div class="q-inner">
-          <div class="q-focus"><strong>面试官想考察：</strong><ul><li>考察点一</li><li>考察点二</li></ul></div>
+          <div class="q-focus"><strong>面试官想考察：</strong><ul><li>考察点</li></ul></div>
           <div class="q-body">
             <section class="q-answer"><h4>你的回答</h4>
               <div class="turn"><p class="who">你</p><p>完整回答，<mark class="keep">值得保留的说法</mark>，<mark class="fix">有问题的说法<sup>1</sup></mark>。</p></div>
               <div class="turn ask"><p class="who">追问 06:20</p><p>追问原文</p></div>
-              <div class="turn"><p class="who">你 <span class="chip small redo">要重练</span></p><p>对追问的回答，<mark class="fix">有问题的说法<sup>2</sup></mark>。</p></div>
+              <div class="turn"><p class="who">你 <span class="chip small redo">要重练</span></p><p><mark class="fix">有问题的说法<sup>2</sup></mark>。</p></div>
             </section>
             <section class="q-advice"><h4>怎么改</h4>
-              <h5>好在哪</h5><ul class="keep-list"><li>具体做法</li></ul>
               <h5>问题在哪</h5><ol class="fix-list"><li><span class="n">1</span> 缺什么、为什么影响判断</li><li><span class="n">2</span> …</li></ol>
-              <div class="better"><h5>改进后的答法</h5><p>可以直接说出口的完整回答，含对追问的回答。</p></div>
-              <h5>改了什么</h5><ol class="changes"><li><span class="n">1</span> 「左栏 1 号标记的原话」→「改进答法里对应的新说法」：为什么这样改</li></ol>
+              <h5>讲圆满</h5><p>只在有归属疑点时写。</p>
+              <div class="better"><h5>改进后的答法</h5><p>对主问题的完整回答。</p><p><strong>追问原文</strong>对追问的回答，不写说话人。</p></div>
+              <h5>改了什么</h5><ol class="changes"><li><span class="n">1</span> 「1 号标记的原话」→「改进答法里的新说法」：为什么</li></ol>
               <p class="practice"><strong>下次怎么练：</strong>一个练习动作或可能的追问</p>
             </section>
           </div>
         </div>
       </details>
-    反问环节（提问的人是候选人）：
-      <div class="turn"><p class="who">你</p><p>候选人的提问原话</p></div>
-      <div class="turn ask"><p class="who">面试官回应</p><p>面试官的回答（整理）</p></div>
-      右栏“改进后的答法”只写更好的提问本身，不夹带标签或面试官的话。
+    答得好（不带 open，收起；右栏没有“问题在哪”“改了什么”）：
+      <details class="qcard good" id="q02"> … 结构同上，标签换成 chip good …
+              <h5>好在哪</h5><ul class="keep-list"><li>具体做法</li></ul>
+              <div class="better">…</div>
+              <h5>还能更好的一处</h5><ul class="changes"><li>「左栏原话」→「更好的说法」：为什么</li></ul>
+    反问环节：左栏候选人的提问用 turn 标“你”，面试官的回答用 turn ask 标“面试官回应”；改进后的答法只写更好的提问。
     closing：
       <h2>下一轮怎么准备</h2><section class="panel">…</section>
       <h2>可以写进简历的新素材</h2><table><tr><th>来源题号与原话</th><th>对应经历</th><th>候选改写</th><th>确认状态</th></tr>…</table>

@@ -9,17 +9,32 @@
       --navy: #243F5A;
       --ink: #202328;
       --muted: #646B73;
+      /* 标准间距。一页排不下时给 html 标签加 class="compact"，换成下面的紧凑间距；字号不变。 */
+      --line: 15.6pt;
+      --gap-section: 14pt;
+      --gap-heading: 8pt;
+      --gap-entry: 10pt;
+      --gap-block: 4pt;
+      --gap-item: 3pt;
     }
-    @page { size: A4; margin: 20mm; }
+    html.compact {
+      --line: 14.4pt;
+      --gap-section: 10pt;
+      --gap-heading: 6pt;
+      --gap-entry: 7pt;
+      --gap-block: 3pt;
+      --gap-item: 1.5pt;
+    }
+    @page { size: A4; margin: 14mm 15mm; }
     * { box-sizing: border-box; }
     html { font-size: 10.1pt; }
     body {
       margin: 0;
       color: var(--ink);
       background: #f2f2ef;
-      font-family: "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC", "Arial Unicode MS", "Microsoft YaHei", "Heiti SC", "PingFang SC", Arial, sans-serif;
+      font-family: "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC", "Arial Unicode MS", "Microsoft YaHei", "STHeiti", "Heiti SC", "PingFang SC", Arial, sans-serif;
       font-size: 10.1pt;
-      line-height: 17.2pt;
+      line-height: var(--line);
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
@@ -27,25 +42,25 @@
       width: 210mm;
       min-height: 297mm;
       margin: 12mm auto;
-      padding: 20mm;
+      padding: 14mm 15mm;
       background: white;
     }
     .resume-header {
-      padding-bottom: 22pt;
+      padding-bottom: var(--gap-heading);
       border-bottom: 1.1pt solid var(--navy);
     }
     .identity {
       display: flex;
       align-items: baseline;
       justify-content: space-between;
-      gap: 12pt 24pt;
+      gap: 4pt 24pt;
       flex-wrap: wrap;
     }
     h1 {
       margin: 0;
       color: var(--navy);
-      font-size: 28pt;
-      line-height: 1.2;
+      font-size: 22pt;
+      line-height: 1.25;
       font-weight: 600;
       letter-spacing: .5pt;
       overflow-wrap: anywhere;
@@ -56,19 +71,18 @@
       font-size: 11.2pt;
       font-weight: 600;
     }
-    .meta { margin-top: 14pt; }
+    .meta { margin-top: var(--gap-block); }
     .meta p {
-      margin: 0 0 7pt;
+      margin: 0;
       color: var(--muted);
       font-size: 9.2pt;
-      line-height: 15pt;
+      line-height: 14.5pt;
       overflow-wrap: anywhere;
     }
-    .meta p:last-child { margin-bottom: 0; }
-    .resume-section { margin-top: 26pt; }
+    .resume-section { margin-top: var(--gap-section); }
     h2 {
-      margin: 0 0 20pt;
-      padding-left: 10pt;
+      margin: 0 0 var(--gap-heading);
+      padding-left: 8pt;
       border-left: 2.3pt solid var(--navy);
       color: var(--navy);
       font-size: 11.2pt;
@@ -78,13 +92,13 @@
       break-after: avoid;
       page-break-after: avoid;
     }
-    .entry + .entry { margin-top: 22pt; }
+    .entry + .entry { margin-top: var(--gap-entry); }
     .entry-head {
       display: flex;
       align-items: baseline;
       justify-content: space-between;
       flex-wrap: wrap;
-      gap: 5pt 16pt;
+      gap: 0 16pt;
       break-inside: avoid;
       break-after: avoid;
       page-break-after: avoid;
@@ -93,41 +107,41 @@
       margin: 0;
       flex: 1 1 200pt;
       min-width: 0;
-      font-size: 11.2pt;
-      line-height: 17pt;
+      font-size: 10.6pt;
+      line-height: 16pt;
       font-weight: 600;
       overflow-wrap: anywhere;
     }
     .entry-date {
       margin: 0 0 0 auto;
       color: var(--muted);
-      font-size: 8.8pt;
+      font-size: 9.2pt;
       line-height: 14pt;
       text-align: right;
       white-space: nowrap;
     }
     .entry-role, .education-detail {
-      margin: 7pt 0 0;
+      margin: 1pt 0 0;
       color: var(--muted);
       font-size: 9.5pt;
-      line-height: 16pt;
+      line-height: 15pt;
       break-after: avoid;
       page-break-after: avoid;
     }
-    .scope { margin: 9pt 0 0; }
-    .project { margin-top: 12pt; }
+    .scope { margin: var(--gap-block) 0 0; }
+    .project { margin-top: var(--gap-block); }
     .project-title {
-      margin: 0 0 5pt;
+      margin: 0;
       font-size: 10.1pt;
-      line-height: 17.2pt;
+      line-height: var(--line);
       font-weight: 600;
       break-after: avoid;
       page-break-after: avoid;
     }
-    .points { margin: 13pt 0 0; padding-left: 13pt; }
-    .project .points { margin-top: 4pt; }
+    .points { margin: var(--gap-block) 0 0; padding-left: 12pt; }
+    .project .points { margin-top: var(--gap-item); }
     .points li {
-      margin: 0 0 7pt;
+      margin: 0 0 var(--gap-item);
       padding-left: 1pt;
       overflow-wrap: anywhere;
       break-inside: avoid;
@@ -138,15 +152,16 @@
     .points li:last-child { margin-bottom: 0; }
     .points li::marker { color: var(--navy); font-size: 8pt; }
     .theme { font-weight: 600; }
-    .pending {
+    .pending, .draft-note {
       color: #A8431B;
       background: #FBEDE6;
       padding: 0 2pt;
       border-radius: 2pt;
     }
-    .skills p { margin: 0 0 7pt; }
+    .skills p { margin: 0 0 var(--gap-item); }
+    .skills p:last-child { margin-bottom: 0; }
     .sample-notice {
-      margin: 14pt 0 0;
+      margin: var(--gap-heading) 0 0;
       color: var(--muted);
       font-size: 7.1pt;
       line-height: 10pt;
@@ -168,6 +183,8 @@
       <div class="meta">{{meta_lines}}</div>
     </header>
     <!-- 示例：按此嵌套生成下方的正文栏目占位，只选用实际需要的结构，正式稿删除本注释。
+    信息行每行一个 <p>联系方式或到岗时间</p>；只有待补稿在信息行里加 <p><span class="draft-note">待补草稿，空位补齐前勿投递</span></p>。
+    演练稿的虚构提示不写在信息行，填进页面末尾的 sample_notice 占位：<p class="sample-notice">演练用虚构材料，请勿用于真实投递</p>；真实稿件删掉这个占位。
     <section class="resume-section">
       <h2>教育背景</h2>
       <div class="entry">
@@ -182,7 +199,7 @@
         <p class="entry-role">实际岗位</p>
         <p class="scope">一句话交代真实工作边界，不需要就删除。</p>
         <div class="project"><p class="project-title">关键项目名称</p>
-          <ul class="points"><li><span class="theme">报名流程</span>：个人动作与对应产物或结果。</li></ul>
+          <ul class="points"><li><span class="theme">报名流程</span>：个人动作与对应产物或结果。</li><li>缺的事实留成<span class="pending">[待确认：补什么]</span>，只在待补稿里出现。</li></ul>
         </div>
       </div>
     </section>
@@ -192,6 +209,10 @@
         <div class="entry-head"><p class="entry-title">项目名称｜实际角色</p><p class="entry-date">时间</p></div>
         <ul class="points"><li>个人解决的问题、做法及对应产物或结果。</li></ul>
       </div>
+    </section>
+    <section class="resume-section">
+      <h2>技能证书</h2>
+      <div class="skills"><p><span class="theme">数据</span>：工具或技能，带上使用场景和实际程度。</p></div>
     </section>
     -->
     {{sections}}
