@@ -26,7 +26,7 @@
 PDF 首选用[交付规则](delivery.md#格式与版本)里的脚本从源稿生成，只在没法跑脚本或用户要改版式时手工填模板。能跑脚本时，可先加 `--save-html <页面>.html` 另存脚本填好的页面，改完再用 `--html <页面>.html --source <源稿>.md` 打印并核验。
 
 - 填充姓名、目标岗位、信息行、栏目块及可选演练标记，无内容的元素删除。原始资料先转义为文本，只用自己生成的已知 HTML 结构组织内容。
-- 模板占位符：`{{name}}`、`{{target_role}}`、`{{meta_lines}}`、`{{sections}}`、`{{sample_notice}}`，以及写入 PDF 标题元数据的 `{{document_title}}`。每个在模板中只出现一次，全部替换，填充后检查不再残留 `{{`。正式投递稿删除 `{{sample_notice}}`，英文简历把 `lang` 改为 `en`。
+- 模板占位符：`{{name}}`、`{{target_role}}`、`{{meta_lines}}`、`{{sections}}`、`{{sample_notice}}`，以及写入 PDF 标题元数据的 `{{document_title}}`。每个在模板中只出现一次，全部替换，填充后检查不再残留 `{{`。正式投递稿删除 `{{sample_notice}}`，英文简历把 `lang` 改为 `en`（脚本从源稿生成时会自动判断）。
 - 模板底部注释里有填好的示意结构，照它的嵌套生成 `{{sections}}`，正式稿删除注释。类名：栏目 `.resume-section`；条目 `.entry`，条目头 `.entry-head`、`.entry-title`、`.entry-date`；任职内的实际岗位 `.entry-role`，教育补充信息 `.education-detail`，职责范围 `.scope`；项目分组 `.project` 和 `.project-title`；要点 `.points`，主题标签 `.theme`；技能段落 `.skills`；页头稿件提示 `.draft-note`，只用于待补稿、写在信息行里；待补空位 `<span class="pending">`；演练虚构提示 `.sample-notice`。
 - 示意中的实习条目对应“复杂任职精选项目”，项目条目对应“直接分条”；正文结构按[经历组织规则](resume-structure.md)选择，不把示意条目整体复制进成品。
 - 默认是标准间距；一页排不下时给 `<html>` 标签加 `class="compact"`，换成紧凑间距，字号不变。

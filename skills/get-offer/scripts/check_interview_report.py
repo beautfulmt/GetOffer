@@ -1146,7 +1146,35 @@ class Checker(object):
             R.err(g, "覆盖情况表缺少列：%s。" % "、".join(miss), "表头写成：能力｜类型｜在哪题考到｜表现。")
         if len(rows) < 2:
             R.err(g, "覆盖情况表没有内容行。", "按覆盖计划逐项填写硬技能和软技能。")
-        for r in rows[1:]:
+        heads = [norm(text(c)) for c in rows[0].find_all(lambda x: x.tag in ("th", "td"))]
+        col = {}
+        for name in ("能力", "类型", "在哪题考到", "表现"):
+            for i, h in enumerate(heads):
+                if name in h:
+                    col[name] = i
+                    break
+        for n, r in enumerate(rows[1:], 1):
+            raw = [text(c) for c in r.find_all(lambda x: x.tag in ("th", "td"))]
+            cells = [norm(c) for c in raw]
+            label = "第 %d 行%s" % (n, "“%s”" % clip(cells[col["能力"]], 12)
+                                     if "能力" in col and col["能力"] < len(cells) and cells[col["能力"]] else "")
+            empty = [name for name, i in sorted(col.items(), key=lambda kv: kv[1])
+                     if i >= len(cells) or not cells[i]]
+            if empty:
+                R.err(g, "覆盖情况表%s的%s是空的。" % (label, "、".join(empty)),
+                      "每行写齐能力、类型（硬技能或软技能）、在哪题考到（题号）和表现；没考到的写“未考到”，表现写“未知”。")
+                continue
+            if "类型" in col and not any(w in cells[col["类型"]] for w in ("硬", "软")):
+                R.warn(g, "覆盖情况表%s的类型写成了“%s”。" % (label, clip(cells[col["类型"]], 10)),
+                       "类型写“硬技能”或“软技能”。")
+            if "在哪题考到" in col:
+                where = cells[col["在哪题考到"]]
+                if not qrefs(raw[col["在哪题考到"]]) and "未考到" not in where:
+                    R.err(g, "覆盖情况表%s的“在哪题考到”既没有题号也没写“未考到”：“%s”。" % (label, clip(where, 12)),
+                          "写实际考到的题号，如 Q03；整轮没问到就写“未考到”。")
+                elif "未考到" in where and "表现" in col and "未知" not in cells[col["表现"]]:
+                    R.err(g, "覆盖情况表%s没考到，表现却写了“%s”。" % (label, clip(cells[col["表现"]], 12)),
+                          "没考到的能力表现写“未知”，不凭简历推断。")
             bad = [x for x in qrefs(text(r)) if x not in self.card_keys]
             if bad:
                 R.err(g, "覆盖情况表“%s”一行提到的 %s 没有对应卡片。" % (clip(text(r), 12), "、".join(bad)), "改成实际存在的题号。")
