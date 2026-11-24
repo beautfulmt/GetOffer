@@ -69,15 +69,18 @@
   字体 ToUnicode 映射和提取出的文字里没有康熙部首（U+2F00-2FDF）或部首补充（U+2E80-2EFF）字符；
   按 ToUnicode 从内容流提取文字，NFKC 归一后核对源稿每一行（标题的每一段、每条要点）都原样连续出现，
   数字对调、改写、丢字、一行挪到别的经历下（先后不同），或多出源稿没有的文字
-  （例如把一条成果多复制给另一段经历）都算问题；页头各行先后不限，模板自带的文字和常见页码不算多出；
+  （例如把一条成果多复制给另一段经历，或“18”写成“180”、“C”写成“C++”）都算问题；
+  页头各行先后不限；要点符号、分隔符、常见页码不算多出；自定义模板自带的固定文字不算多出，
+  --html、--check-pdf 复检时要用 --template 指定同一份模板；
   单页稿文字只到页面不足 3/4 时提示可能没写满；多页稿末页只有几行时提示。
   --final 另查：没有待补空位（橙色标记和普通文字里的都算）、没有草稿提示和虚构标记、
   页面文字里没有样式名、经历编号等内部标签；从源稿、--html 页面和 PDF 文字层三处查，入口不同规则相同；
   “演练”“示例”这类也可能出现在真实经历里的词只提醒，不算问题。
   --final --sample 用于演练稿的最终版：空位、草稿提示和内部标签照查，“---”之后的虚构标记
   必须保留并写明是演练或虚构材料，PDF 文字层里也要找得到这句提示（没有反而算问题）；
-  只核验 PDF、没有源稿时，要有“虚构材料”“演练用”“勿投递”这类明确的声明，
-  正文里的“应急演练”“虚构角色”不算；
+  只核验 PDF 时 --final --sample 必须带 --source（看不到源稿就判断不了是不是演练稿）；
+  --final 时 PDF 里有“勿投递”“Do not submit”这类整句式的演练声明算问题，
+  经历里的“应急演练”“设计虚构人物”不算；
   通过后仍是演练稿，结果里写明不能用于真实投递。
   文字层出现部首且没有指定 --font 时，自动换候选中文字体重试，最多 3 次。
   解析不了的 PDF 结构只降级为警告并说明哪项没查。
@@ -130,19 +133,18 @@ INTERNAL_LABELS = (
 )
 # 待补稿才会写的说法，任何正式稿里都算问题。源稿的标记已经单独报过时不再重复报。
 DRAFT_PHRASES = ("待补草稿", "待补稿")
-# 演练稿的虚构标记会写的说法：真实投递稿里算问题，--sample 的演练稿里本来就该有，不查。
-SAMPLE_PHRASES = ("勿投递", "勿用于真实投递", "虚构材料", "演练用", "演练稿")
+# 声明整份材料是演练稿的说法（英文不分大小写）：真实投递稿里算问题，--sample 的演练稿里本来就该有，不查。
+# 只收整句式的声明；“设计虚构人物”“组织应急演练”这类经历里的词组不算。
+SAMPLE_PHRASES = ("勿投递", "勿用于真实投递", "不能用于真实投递", "虚构材料", "虚构简历", "均为虚构", "纯属虚构",
+                  "演练用", "演练稿", "演练材料", "fictional resume", "fictitious resume", "do not submit",
+                  "not for real applications", "for practice only", "sample only")
 # 真实经历里也可能出现的词（应急演练、示例代码、TODO 应用），只提醒，由人判断。
 DRAFT_HINT_WORDS = ("待确认", "待补", "演练", "虚构", "示范", "示例", "占位符", "墨蓝", "TODO", "TBD")
 SAMPLE_HINT_WORDS = ("演练", "虚构")
-# 声明是演练材料的说法（英文不分大小写）。在整份 PDF 文字里找时只认这些整句式的声明，
-# 单独的“演练”“虚构”“fictional”可能是真实经历（“组织校园应急演练”“为互动小说设计虚构角色”），不算。
-SAMPLE_MARK_WORDS = ("虚构材料", "虚构简历", "虚构信息", "虚构人物", "虚构经历", "均为虚构", "纯属虚构",
-                     "演练用", "演练稿", "演练材料", "模拟材料", "示例材料", "勿投递", "勿用于真实投递",
-                     "不能用于真实投递", "fictional resume", "fictional material", "fictitious resume",
-                     "practice only", "sample only", "do not submit", "not for real applications")
-# 已经确定是末尾的虚构提示时，写“演练”“虚构”也够说明。只写“感谢阅读”这类不算。
-NOTICE_MARK_WORDS = SAMPLE_MARK_WORDS + ("演练", "虚构", "fictional", "fictitious")
+# 已经确定是末尾的虚构提示（源稿“---”之后或 .sample-notice）时，写“演练”“虚构”也够说明。
+# 只写“感谢阅读”这类不算。
+NOTICE_MARK_WORDS = SAMPLE_PHRASES + ("演练", "虚构", "模拟材料", "示例材料", "fictional", "fictitious",
+                                      "practice", "sample")
 SAMPLE_MARK_EXAMPLE = "演练用虚构材料，请勿用于真实投递"
 DENSITY_NAMES = {"standard": "标准", "compact": "紧凑"}
 FACT_ID_RE = re.compile(r"(?<![A-Za-z0-9])E\d{3}(?:-F\d{2})?(?![0-9])")
@@ -794,14 +796,17 @@ class TextDiff(object):
         self.extra = []
 
 
-# 页面里可以有、源稿里没有的文字：常见的页眉和页码。别的多余文字都算问题。
+# 版面自己加的字符：条目头的分隔符、要点符号。只有全是这些字符的剩余文字才不算多出来。
+# 数字、字母、汉字和 %、+、# 这类会改变意思的符号都算内容（“18”写成“18%”、“C”写成“C++”）。
+LAYOUT_CHARS = set("｜|▪•·●◦∙‧■□◆◇▸►–—-/:：,，、;；")
+# 页面里可以有、源稿里没有的文字：常见的页眉和页码。紧挨着数字的不算页码（“18”写成“180”）。
 EXTRA_OK_RE = re.compile(r"^(?:个人简历|简历|履历|resume|cv|curriculumvitae|\d{1,2}|\d{1,2}/\d{1,2}|"
                          r"第\d{1,2}页(?:共\d{1,2}页)?|page\d{1,2}(?:of\d{1,2})?)$", re.I)
 
 
 def _meaningful(run):
-    """去掉标点和符号（分隔符、要点符号、括号）后剩下的文字。"""
-    return "".join(ch for ch in run if not unicodedata.category(ch).startswith(("P", "S", "Z")))
+    """去掉版面字符后剩下的文字。"""
+    return "".join(ch for ch in run if ch not in LAYOUT_CHARS)
 
 
 def compare_text(pieces, page_text, nfkc, allowed=""):
@@ -854,11 +859,16 @@ def compare_text(pieces, page_text, nfkc, allowed=""):
 
     cursor = 0
     for _, ln, group in rows:
-        found = [find_free(sp, cursor) for sp, _ in group]
-        if all(i >= 0 for i in found):
-            for (sp, _), i in zip(group, found):
-                take(i, len(sp), ln)
-            cursor = min(i + len(sp) for (sp, _), i in zip(group, found))
+        # 组内长的先占位置，短的再找剩下的：“北京大学计算机学院｜计算机”里专业不会落进院名
+        ends = []
+        for sp, _ in sorted(group, key=lambda g: -len(g[0])):
+            i = find_free(sp, cursor)
+            if i < 0:
+                break
+            take(i, len(sp), ln)
+            ends.append(i + len(sp))
+        if len(ends) == len(group):
+            cursor = min(ends)
         else:
             diff.order.append((ln, group[0][1].strip()))
             for sp, _ in group:
@@ -877,7 +887,10 @@ def compare_text(pieces, page_text, nfkc, allowed=""):
                 j += 1
             run = page[k:j]
             words = _meaningful(run)
-            if words and not EXTRA_OK_RE.match(words) and words not in _meaningful(allowed):
+            by_digit = (k > 0 and page[k - 1].isdigit()) or (j < len(page) and page[j].isdigit())
+            page_no = any(ch.isdigit() for ch in words)
+            ok = bool(EXTRA_OK_RE.match(words)) and not (page_no and by_digit)
+            if words and not ok and words not in _meaningful(allowed):
                 before = next((owner[x] for x in range(k - 1, -1, -1) if owner[x]), 0)
                 diff.extra.append((max(before, 0), run))
             k = j
@@ -1876,7 +1889,8 @@ def check_conservation(report, pieces, page, allowed=""):
     if diff.extra:
         report.problem("页面里多出了源稿没有的文字（例如把一条成果多复制给了另一段经历）",
                        describe_extra(diff.extra),
-                       "删掉多出来的内容；确实要加就先写进源稿，再重新生成或打印")
+                       "删掉多出来的内容；确实要加就先写进源稿，再重新生成或打印。"
+                       "是自定义模板自带的固定文字时，加 --template 指定那份模板")
         ok = False
     if ok:
         report.check("通过", "内容守恒", "源稿 %d 个可见字符全部进入页面，每行原样连续出现，没有多出的文字" % total)
@@ -1930,9 +1944,13 @@ def check_final_source(report, src_text, res, sample=False):
 
 
 def has_sample_mark(text, notice=False):
-    """notice=True 表示 text 就是末尾的虚构提示本身；否则是整份页面或 PDF 的文字，只认明确的声明用语。"""
-    low = text.lower()
-    return any(w in low for w in (NOTICE_MARK_WORDS if notice else SAMPLE_MARK_WORDS))
+    """notice=True 表示 text 就是末尾的虚构提示本身；否则是整份页面或 PDF 的文字，只认整句式的声明。"""
+    return any(phrase_in(w, text) for w in (NOTICE_MARK_WORDS if notice else SAMPLE_PHRASES))
+
+
+def phrase_in(phrase, text):
+    """不分大小写、忽略空白地找说法：PDF 提取出的英文可能没有空格（“Donotsubmit”）。"""
+    return squash(phrase).lower() in squash(text).lower()
 
 
 def check_labels(report, text, where_desc, skip_draft_words=False, sample=False):
@@ -1945,10 +1963,11 @@ def check_labels(report, text, where_desc, skip_draft_words=False, sample=False)
     found += sorted(set(FACT_ID_RE.findall(text)))
     if not skip_draft_words:
         phrases = DRAFT_PHRASES if sample else DRAFT_PHRASES + SAMPLE_PHRASES
-        found += [w for w in phrases if w in text]
+        found += [w for w in phrases if phrase_in(w, text)]
     if found:
-        report.problem("页面文字里有内部标签：%s" % "、".join("“%s”" % f for f in found), where_desc,
-                       "删掉样式名、模板说明、经历编号和草稿用语；这些只放在单独记录里")
+        report.problem("页面文字里有内部标签或草稿、演练用语：%s" % "、".join("“%s”" % f for f in found), where_desc,
+                       "删掉样式名、模板说明、经历编号和草稿用语，这些只放在单独记录里；"
+                       "是演练稿就保留虚构声明，改用 --final --sample 并带上 --source 检查")
     if not skip_draft_words:
         covered = "".join(found)
         hints = [w for w in DRAFT_HINT_WORDS if w in text and w not in covered
@@ -2108,7 +2127,8 @@ def evaluate_pdf(report, info, max_pages, expected=None, expected_desc="", final
             if diff.extra:
                 report.problem("PDF 里多出了%s没有的文字（例如把一条成果多复制给了另一段经历）" % expected_desc,
                                describe_extra(diff.extra),
-                               "删掉多出来的内容后重新导出；确实要加就先写进源稿")
+                               "删掉多出来的内容后重新导出；确实要加就先写进源稿。"
+                               "是自定义模板自带的固定文字时，加 --template 指定那份模板")
             if diff.order:
                 report.problem("PDF 里这些行的位置和%s不同（例如一条成果挪到了别的经历下）" % expected_desc,
                                "从这里起和源稿对不上：" + describe_lines(diff.order) + "（被挪动的行可能在它们前面）",
@@ -2142,8 +2162,6 @@ def evaluate_pdf(report, info, max_pages, expected=None, expected_desc="", final
             mark_ok = all(m in squash(text, True) for m in marks)
         else:
             mark_ok = has_sample_mark(text)
-            if sample and mark_ok and not flagged.get("sample"):
-                report.warn("没有源稿，虚构标记只按“虚构材料”“勿投递”这类声明用语判断；加 --source 可以核对提示原文")
         if sample and not flagged.get("sample_reported") and not mark_ok:
             report.problem("演练稿里找不到虚构标记", "PDF 文字",
                            "在源稿末尾加单独一行“---”和一句虚构提示（例如“%s”）后重新导出；"
@@ -2443,9 +2461,17 @@ def write_output(report, out, data):
         report.warn("%s 是之前生成的旧文件，这次没有覆盖，内容和当前源稿不一定一致；修好后重跑会更新" % out.resolve())
 
 
+def given_template_text(args):
+    """--html、--check-pdf 时 --template 指定的模板里自带的文字；没给就按自带模板（没有固定文字）。"""
+    if not args.template:
+        return ""
+    return template_text(read_text(args.template, "模板"))
+
+
 def run_html(args, report):
     html_path = Path(args.html)
     html_text = read_text(html_path, "HTML 文件")
+    allowed = given_template_text(args)
     out = resolve_out(args, html_path, [("--html 页面", html_path), ("--source 源稿", args.source)])
     page = PageText.of(html_text)
     pieces = None
@@ -2457,7 +2483,7 @@ def run_html(args, report):
         src_text = read_text(args.source, "源稿")
         pieces = source_pieces(src_text)
         check_source_text(report, src_text)
-        page_reported = check_conservation(report, pieces, page)
+        page_reported = check_conservation(report, pieces, page, allowed)
     else:
         report.check("未做", "内容守恒", "没有 --source，无法对照源稿")
     final_before = len(report.problems)
@@ -2478,7 +2504,7 @@ def run_html(args, report):
     if pieces is not None:
         evaluate_pdf(report, info, args.max_pages, pieces, "源稿", args.final, flagged, html_checked=True,
                      page_hint=layout.hint, sample=args.sample, page_reported=page_reported,
-                     sample_marks=[page.notice_text] if page.notices else ())
+                     sample_marks=[page.notice_text] if page.notices else (), allowed=allowed)
     else:
         evaluate_pdf(report, info, args.max_pages, page.pieces(), "HTML 页面文字", args.final, flagged,
                      html_checked=True, page_hint=layout.hint, sample=args.sample,
@@ -2493,6 +2519,7 @@ def run_check_pdf(args, report):
     if not p.is_file():
         raise CannotRun("PDF 文件不存在：%s" % args.check_pdf)
     info = analyze_pdf(p.read_bytes())
+    allowed = given_template_text(args)
     report.fact("文件", str(p.resolve()))
     report.fact("页数", page_count_fact(info))
     report.fact("字体", font_fact(info))
@@ -2516,7 +2543,8 @@ def run_check_pdf(args, report):
     final_found = len(report.problems) - final_before
     labels_before = len(report.problems)
     evaluate_pdf(report, info, args.max_pages, pieces, "源稿" if pieces else "",
-                 args.final, flagged, html_checked=False, sample=args.sample, sample_marks=marks)
+                 args.final, flagged, html_checked=False, sample=args.sample, sample_marks=marks,
+                 allowed=allowed)
     final_found += count_final_problems(report, labels_before)
     final_status(report, args.final, final_found, args.sample)
 
@@ -2547,7 +2575,8 @@ def build_parser():
         prog="build_resume_pdf.py", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("source_md", nargs="?", help="简历 Markdown 源稿")
     ap.add_argument("--out", help="输出 PDF 路径（默认与输入同名，扩展名 .pdf）")
-    ap.add_argument("--template", help="HTML 模板（默认 ../assets/resume-navy.html）")
+    ap.add_argument("--template", help="HTML 模板（默认 ../assets/resume-navy.html）；配合 --html、--check-pdf 时"
+                                       "说明成品用的模板，模板自带的固定文字不算多出来的内容")
     ap.add_argument("--final", action="store_true", help="按正式投递稿检查：空位、演练标记、内部标签算问题")
     ap.add_argument("--sample", action="store_true",
                     help="配合 --final，用于演练稿（虚构材料）的最终版：其余照查，“---”之后的虚构标记必须保留")
@@ -2597,6 +2626,10 @@ def main(argv=None):
             raise CannotRun("--max-pages 和 --timeout 必须是正整数")
         if args.check_pdf and args.density != "auto":
             raise CannotRun("--density 只在生成或打印时有用，--check-pdf 不改版面")
+        if args.check_pdf and args.sample and not args.source:
+            raise CannotRun("只核验 PDF 时，--final --sample 必须配合 --source",
+                            hint="演练稿是不是演练稿要看源稿末尾“---”之后的虚构提示，单看 PDF 里的词判断不了；"
+                                 "加 --source 源稿.md 后重跑")
         if args.lang != "auto" and not args.source_md:
             raise CannotRun("--lang 只在从源稿生成时有用", hint="--html 页面的语言直接改 <html lang=…>")
         if args.save_html and not args.source_md:

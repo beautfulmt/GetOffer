@@ -24,7 +24,7 @@
   | PDF | 运行 [scripts/build_resume_pdf.py](../scripts/build_resume_pdf.py)，只需 Python 3.8+ 标准库和本机的 Chrome、Edge 或 Chromium | 宿主现有的文档或 PDF 能力；或[手工填模板](resume-style.md#手工填模板)后用无头浏览器打印，例如 `chrome --headless --no-pdf-header-footer --print-to-pdf=<目标>.pdf <页面>.html`。能跑 Python 时再用脚本的 `--check-pdf` 核验 |
   | 可编辑DOCX | 宿主现有文档生成能力 | 本机已有的 DOCX 工具；macOS 可用 `textutil -convert docx`，但产物没有 `word/styles.xml`，也未设 A4 和中文 `eastAsia` 字体，渲染时中文可能不可见。补写样式、`w:eastAsia` 字体和 A4 的 `sectPr` 后重新渲染核对，仍有样式缺失就如实说明降级 |
 
-- **PDF 脚本。**源稿按[简历模板](../assets/resume-template.md)写，写法以脚本 `--help` 为准。运行 `python3 <技能目录>/scripts/build_resume_pdf.py <源稿>.md`，在源稿旁生成同名 PDF 并自动核验。初稿和待补稿不加参数；真实投递稿加 `--final`，空位、草稿或演练标记、内部标签都算问题；演练材料的最终版加 `--final --sample`，其余照查，但“---”之后的虚构标记必须保留并写明是演练或虚构材料，通过后仍是演练稿，不称为真实投递稿。英文简历脚本会自动按英文处理，也可加 `--lang en`。用户允许多页时加 `--max-pages N`。别的工具生成的 PDF 用 `--check-pdf <成品>.pdf --source <源稿>.md` 核验，手工填好的页面用 `--html <页面>.html --source <源稿>.md` 打印并核验。
+- **PDF 脚本。**源稿按[简历模板](../assets/resume-template.md)写，写法以脚本 `--help` 为准。运行 `python3 <技能目录>/scripts/build_resume_pdf.py <源稿>.md`，在源稿旁生成同名 PDF 并自动核验。初稿和待补稿不加参数；真实投递稿加 `--final`，空位、草稿或演练标记、内部标签都算问题；演练材料的最终版加 `--final --sample`，其余照查，但“---”之后的虚构标记必须保留并写明是演练或虚构材料，通过后仍是演练稿，不称为真实投递稿。英文简历脚本会自动按英文处理，也可加 `--lang en`。用户允许多页时加 `--max-pages N`。别的工具生成的 PDF 用 `--check-pdf <成品>.pdf --source <源稿>.md` 核验（演练稿的最终版复检必须带 `--source`；用了自定义模板时复检也加同一个 `--template`），手工填好的页面用 `--html <页面>.html --source <源稿>.md` 打印并核验。
   - 退出码 0：生成并通过检查，可能附提醒；“页面可能没写满”按下文核验第 3 步处理。
   - 退出码 1：有问题，逐条写了是什么、在哪、怎么修。这时不写正式文件，打印出的 PDF 另存到系统临时目录、文件名带“未通过”，只供查看；正式位置原有的旧文件不覆盖，结果里会提醒它和当前源稿不一定一致。修好后重跑。
   - 退出码 2：没法运行，例如参数错、找不到浏览器、源稿结构不认识（附行号）。结构问题按提示改源稿；没有 Python 或浏览器时用上表的备选。
