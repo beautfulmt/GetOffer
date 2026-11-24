@@ -229,10 +229,21 @@ def norm(s):
     return "".join(ch for ch in s if unicodedata.category(ch)[0] in "LN").lower()
 
 
+# 引用比对时可以忽略的字符：空白、引号括号和中文句读。小数点、百分号、正负号、单位和
+# C++、C# 这类技术词里的符号都保留（“1.8%”引成“18%”算错）。
+QUOTE_IGNORE = set("，。、；：！？“”‘’「」『』《》〈〉（）【】,;!?\"'()[]")
+
+
+def qnorm(s):
+    s = unicodedata.normalize("NFKC", s or "")
+    return "".join(ch for ch in s if not ch.isspace() and ch not in QUOTE_IGNORE
+                   and unicodedata.category(ch) not in ("Cf", "Cc")).lower()
+
+
 def found_in(quote, haystack):
-    """忽略空白和标点，省略号处分段，按顺序在 haystack 里找到每一段。"""
-    target = norm(haystack)
-    segments = [norm(x) for x in ELLIPSIS_RE.split(quote)]
+    """忽略空白、引号和句读，省略号处分段，按顺序在 haystack 里找到每一段。"""
+    target = qnorm(haystack)
+    segments = [qnorm(x) for x in ELLIPSIS_RE.split(quote)]
     segments = [x for x in segments if x]
     if not segments:
         return False
@@ -704,8 +715,13 @@ class Checker(object):
             R.err(g, "没有“面试官想考察”（.q-focus）。", "每题都写一到两项考察点：<div class=\"q-focus\"><strong>面试官想考察：</strong><ul><li>…</li></ul></div>。")
         else:
             items = focus.find_all(lambda x: x.tag == "li")
+            empty = [i for i, li in enumerate(items, 1) if not norm(text(li))]
             if not items and not norm(text(focus, skip=lambda x: x.tag in ("strong", "b")).replace("面试官想考察", "")):
                 R.err(g, "“面试官想考察”是空的。", "写一到两项考察点。")
+            elif items and len(empty) == len(items):
+                R.err(g, "“面试官想考察”的列表项都是空的。", "每项写一个具体的考察点。")
+            elif empty:
+                R.err(g, "“面试官想考察”第 %s 项是空的。" % join_nums(empty), "删掉空项，或写上具体的考察点。")
             elif len(items) > 2:
                 R.warn(g, "考察点写了 %d 项，规则是一到两项。" % len(items), "合并或删到最关键的一两项。")
         if ASK_BACK_RE.search(question) is None and ADMIN_RE.search(question):
@@ -1019,13 +1035,17 @@ class Checker(object):
             if c.kind:
                 actual[c.kind] += 1
         stated = {}
+        seen = dict((k, []) for k, _ in LABELS)
         for chip in chips:
             self.check_chip(g, chip)
             t = text(chip)
             for k, w in LABELS:
-                m = re.search(w + r"\s*(\d+)", t)
-                if m:
+                for m in re.finditer(w + r"\s*(\d+)", t):
+                    seen[k].append(int(m.group(1)))
                     stated[k] = int(m.group(1))
+        dup = ["%s（%s）" % (LABEL_OF[k], "、".join(str(n) for n in v)) for k, v in seen.items() if len(v) > 1]
+        if dup:
+            R.err(g, "标签统计里同一种标签写了不止一次：%s。" % "；".join(dup), "三种标签各写一次，删掉重复的那个。")
         missing = [LABEL_OF[k] for k, _ in LABELS if k not in stated]
         if missing:
             R.err(g, "标签统计缺少：%s 的数字。" % "、".join(missing), "三种标签都写，0 张也写 0。")
@@ -1233,15 +1253,42 @@ class Checker(object):
                 if not all(k in head for k in keys)]
         if miss:
             R.err(g, "新素材表缺少列：%s。" % "、".join(miss), "表头写成：来源题号与原话｜对应经历｜候选改写｜确认状态。")
-        for i, r in enumerate(rows[1:], 1):
-            cells = r.find_all(lambda x: x.tag in ("td", "th"))
-            first = text(cells[0]) if cells else ""
+        data = rows[1:]
+        if not data:
+            R.err(g, "新素材表只有表头，没有内容行。", "逐行填写来源题号与原话、对应经历、候选改写和确认状态；没有新素材就删掉表格写“无”。")
+            return
+        if len(data) == 1 and re.match(r"^\s*(无|没有)", text(data[0])):
+            return
+        names = ("来源题号与原话", "对应经历", "候选改写", "确认状态")
+        for i, r in enumerate(data, 1):
+            cells = [text(c) for c in r.find_all(lambda x: x.tag in ("td", "th"))]
+            cells += [""] * (4 - len(cells))
+            empty = [names[k] for k in range(4) if not norm(cells[k])]
+            first = cells[0]
             refs = qrefs(first)
             if not refs:
-                R.err(g, "新素材表第 %d 行的来源没写题号：“%s”。" % (i, clip(first, 16)), "来源写成“Q07 原话……”。")
+                R.err(g, "新素材表第 %d 行的来源没写题号：“%s”。" % (i, clip(first, 16)), "来源写成“Q07 “原话””。")
             bad = [x for x in refs if x not in self.card_keys]
             if bad:
                 R.err(g, "新素材表第 %d 行的来源 %s 没有对应卡片。" % (i, "、".join(bad)), "改成实际存在的题号。")
+            if empty:
+                R.err(g, "新素材表第 %d 行的%s是空的。" % (i, "、".join(empty)),
+                      "每行写齐四项：来源题号和候选人原话、对应经历、候选改写、确认状态（待确认或已确认）。")
+                continue
+            spans = [sp[2] for sp in quoted_spans(first)]
+            if not spans:
+                R.err(g, "新素材表第 %d 行的来源只有题号，没有引用候选人的原话。" % i,
+                      "写成“Q07 “原话””，原话照抄该题左栏，回写前要能核对。")
+            else:
+                for q in spans:
+                    cards = [self.card_keys[x] for x in refs if x in self.card_keys]
+                    answers = [t for t in (self.candidate_text(c) for c in cards) if t]
+                    if answers and not any(found_in(q, a) for a in answers):
+                        R.err(g, "新素材表第 %d 行引用的原话“%s”在 %s 的左栏回答里找不到。" % (i, clip(q, 20), "、".join(refs)),
+                              "照抄候选人在这道题里的原话，数字和单位不能改；候选改写另写在第三列。")
+            if "确认" not in cells[3]:
+                R.warn(g, "新素材表第 %d 行的确认状态写成了“%s”。" % (i, clip(cells[3], 10)),
+                       "写“待确认”或“已确认”：用户确认之前不回写简历。")
 
     # -- 链接
     def check_links(self):

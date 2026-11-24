@@ -21,7 +21,8 @@
 退出码
   0  生成并通过检查（可以有警告）
   1  发现问题，逐条列出“是什么、在哪、怎么修”。这时不写 --out 指向的正式文件：
-     打印出的 PDF 另存到系统临时目录，文件名带“未通过”，只供查看，路径写在结果里
+     打印出的 PDF 另存到系统临时目录（按正式文件路径分开存，不同目录的同名稿互不覆盖），
+     文件名带“未通过”，只供查看，路径写在结果里；PDF 文字读不出来（加密、结构损坏）也算这一类
   2  无法运行：参数错、文件不存在、找不到浏览器、源稿结构不认识
 
 源稿写法（逐行识别）
@@ -68,25 +69,32 @@
   文件确为 PDF；没有残留的 {{；页数不超过 --max-pages（默认 1）；
   字体 ToUnicode 映射和提取出的文字里没有康熙部首（U+2F00-2FDF）或部首补充（U+2E80-2EFF）字符；
   按 ToUnicode 从内容流提取文字，NFKC 归一后核对源稿每一行（标题的每一段、每条要点）都原样连续出现，
-  数字对调、改写、丢字、一行挪到别的经历下（先后不同），或多出源稿没有的文字
-  （例如把一条成果多复制给另一段经历，或“18”写成“180”、“C”写成“C++”）都算问题；
-  页头各行先后不限；要点符号、分隔符、常见页码不算多出；自定义模板自带的固定文字不算多出，
+  英文词与词之间的空格也要对上（换行处可以是空格也可以是长词断开）；数字对调、改写、丢字、
+  一行挪到别的经历下（先后不同）、条目头公司和岗位对调（时间排在哪都行），或多出源稿没有的文字
+  （例如把一条成果多复制给另一段经历，“18”写成“180”或“-18”，“HTML”写成“HTML5”，
+  “C”写成“C++”）都算问题；页头各行先后不限；
+  只有要点符号、分隔符、“个人简历”这类页眉，以及页脚里整行的页码不算多出：
+  PDF 里是离上下纸边 2 cm 以内、整行只有页码的那一行，HTML 里是 <footer>、position:fixed 或页码类名里的字；
+  自定义模板自带的固定文字可以不出现，出现时只能出现一次、不能只剩半截，
   --html、--check-pdf 复检时要用 --template 指定同一份模板；
   单页稿文字只到页面不足 3/4 时提示可能没写满；多页稿末页只有几行时提示。
-  --final 另查：没有待补空位（橙色标记和普通文字里的都算）、没有草稿提示和虚构标记、
-  页面文字里没有样式名、经历编号等内部标签；从源稿、--html 页面和 PDF 文字层三处查，入口不同规则相同；
+  --final 另查：正文至少有一个栏目且没有空栏目；没有待补空位（橙色标记和普通文字里的都算）、
+  没有草稿提示和虚构标记、页面文字里没有样式名、事实编号（E001-F02）等内部标签，单独的 E101 这类只提醒；
+  从源稿、--html 页面和 PDF 文字层三处查，入口不同规则相同；
   “演练”“示例”这类也可能出现在真实经历里的词只提醒，不算问题。
   --final --sample 用于演练稿的最终版：空位、草稿提示和内部标签照查，“---”之后的虚构标记
   必须保留并写明是演练或虚构材料，PDF 文字层里也要找得到这句提示（没有反而算问题）；
   只核验 PDF 时 --final --sample 必须带 --source（看不到源稿就判断不了是不是演练稿）；
-  --final 时 PDF 里有“勿投递”“Do not submit”这类整句式的演练声明算问题，
-  经历里的“应急演练”“设计虚构人物”不算；
+  --final 时页面里有“请勿投递”“均为虚构”“Fictional resume”这类声明，或单独成句的“Do not submit.”算问题，
+  经历里的“组织应急演练用时 30 分钟”“设计虚构人物”“who do not submit their forms”不算；
+  虚构提示要写明是虚构或只供练习，“Thank you for reviewing my writing samples”不算；
   通过后仍是演练稿，结果里写明不能用于真实投递。
   文字层出现部首且没有指定 --font 时，自动换候选中文字体重试，最多 3 次。
-  解析不了的 PDF 结构只降级为警告并说明哪项没查。
+  PDF 文字读不出来（加密、结构损坏）时算问题（退出码 1），正式稿检查标为未做，不给通过。
 """
 
 import argparse
+import hashlib
 import html as htmllib
 import os
 import re
@@ -133,21 +141,28 @@ INTERNAL_LABELS = (
 )
 # 待补稿才会写的说法，任何正式稿里都算问题。源稿的标记已经单独报过时不再重复报。
 DRAFT_PHRASES = ("待补草稿", "待补稿")
-# 声明整份材料是演练稿的说法（英文不分大小写）：真实投递稿里算问题，--sample 的演练稿里本来就该有，不查。
-# 只收整句式的声明；“设计虚构人物”“组织应急演练”这类经历里的词组不算。
-SAMPLE_PHRASES = ("勿投递", "勿用于真实投递", "不能用于真实投递", "虚构材料", "虚构简历", "均为虚构", "纯属虚构",
-                  "演练用", "演练稿", "演练材料", "fictional resume", "fictitious resume", "do not submit",
-                  "not for real applications", "for practice only", "sample only")
+# 声明整份材料是演练稿的说法（不分大小写、忽略空白）：真实投递稿里算问题，--sample 的演练稿里本来就该有，不查。
+# 只收指向“这份材料”的整句式声明。经历里的“组织应急演练用时 30 分钟”“设计虚构人物”
+# “提醒没有 do not submit 表单的用户”都不算；拿不准的词只提醒（见 DRAFT_HINT_WORDS）。
+SAMPLE_PHRASES = ("勿投递", "勿用于真实投递", "不能用于真实投递", "请勿用于投递", "仅供演练", "仅供练习",
+                  "均为虚构", "纯属虚构", "虚构简历", "演练用虚构", "演练用材料", "fictional resume",
+                  "fictitious resume", "resume is fictional", "not for real applications", "for practice only",
+                  "do not submit this resume", "do not use for real applications")
 # 真实经历里也可能出现的词（应急演练、示例代码、TODO 应用），只提醒，由人判断。
-DRAFT_HINT_WORDS = ("待确认", "待补", "演练", "虚构", "示范", "示例", "占位符", "墨蓝", "TODO", "TBD")
+DRAFT_HINT_WORDS = ("待确认", "待补", "演练", "虚构", "示范", "示例", "占位符", "墨蓝", "TODO", "TBD",
+                    "fictional", "do not submit")
 SAMPLE_HINT_WORDS = ("演练", "虚构")
 # 已经确定是末尾的虚构提示（源稿“---”之后或 .sample-notice）时，写“演练”“虚构”也够说明。
 # 只写“感谢阅读”这类不算。
-NOTICE_MARK_WORDS = SAMPLE_PHRASES + ("演练", "虚构", "模拟材料", "示例材料", "fictional", "fictitious",
-                                      "practice", "sample")
+# 要说明材料是虚构的或只供练习；“Thank you for reviewing my writing samples”这类不算。
+NOTICE_MARK_WORDS = SAMPLE_PHRASES + ("演练", "虚构", "练习用", "模拟材料", "示例材料", "fictional", "fictitious",
+                                      "for practice", "practice only", "practice material", "mock resume",
+                                      "sample resume")
 SAMPLE_MARK_EXAMPLE = "演练用虚构材料，请勿用于真实投递"
 DENSITY_NAMES = {"standard": "标准", "compact": "紧凑"}
-FACT_ID_RE = re.compile(r"(?<![A-Za-z0-9])E\d{3}(?:-F\d{2})?(?![0-9])")
+# 经历库的事实编号（E001-F02）一定是内部标签；单独的 E001 也可能是真实的型号或故障码（E101），只提醒。
+FACT_ID_RE = re.compile(r"(?<![A-Za-z0-9])E\d{3}-F\d{2}(?![0-9])")
+EXP_ID_RE = re.compile(r"(?<![A-Za-z0-9-])E\d{3}(?![0-9]|-F\d)")
 
 
 class CannotRun(Exception):
@@ -656,60 +671,84 @@ def _strip_wrapper(t):
 class PageText(HTMLParser):
     """取 <body> 里的可见文字，并统计 .pending / .draft-note / .sample-notice。
 
-    text 是全部可见文字；clean 去掉了这三类标记里的文字，用来查正文有没有混进草稿用语。
+    text 是全部可见文字，块级元素（段落、列表项、标题等）之间用换行隔开，行内元素直接相连；
+    margin 与 text 逐字对应，标出页脚（<footer>、position:fixed 或页码类名）里的字，页码只在这里放过；
+    clean 同样按块换行，去掉了 .pending / .draft-note / .sample-notice 里的文字，用来查正文有没有混进草稿用语。
     """
 
     SKIP = ("script", "style", "title", "head", "template", "noscript")
     VOID = ("br", "img", "hr", "meta", "link", "input", "base", "col", "area", "source", "wbr")
+    BLOCK = ("p", "div", "li", "ul", "ol", "h1", "h2", "h3", "h4", "h5", "h6", "section", "header", "footer",
+             "main", "article", "aside", "nav", "table", "thead", "tbody", "tr", "td", "th", "dl", "dt", "dd",
+             "blockquote", "pre", "figure", "figcaption", "address", "br", "hr")
+    MARGIN_CLASSES = ("footer", "page-footer", "page-number", "pagenum", "page-num")
 
     def __init__(self):
         HTMLParser.__init__(self, convert_charrefs=True)
         self.parts = []
         self.clean_parts = []
+        self.buf = []
+        self.mask = []
         self.skip = 0
         self.stack = []
         self.marked_depth = 0
+        self.margin_depth = 0
         self.pending = 0
         self.notices = 0
         self.draft_notes = 0
         self.notice_depth = 0
         self.notice_parts = []
 
+    def _emit(self, text, margin, clean=True):
+        self.buf.append(text)
+        self.mask.extend([margin] * len(text))
+        if clean:
+            self.clean_parts.append(text)
+
     def handle_starttag(self, tag, attrs):
+        if tag in self.BLOCK and not self.skip:
+            self._emit("\n", False)
         if tag in self.VOID:
             return
-        classes = (dict(attrs).get("class") or "").split()
+        a = dict(attrs)
+        classes = (a.get("class") or "").split()
         marked = "pending" in classes or "sample-notice" in classes or "draft-note" in classes
         self.pending += "pending" in classes
         self.notices += "sample-notice" in classes
         self.draft_notes += "draft-note" in classes
         notice = "sample-notice" in classes
-        self.stack.append((tag, tag in self.SKIP, marked, notice))
+        margin = (tag == "footer" or any(c in self.MARGIN_CLASSES for c in classes)
+                  or bool(re.search(r"position\s*:\s*fixed", a.get("style") or "", re.I)))
+        self.stack.append((tag, tag in self.SKIP, marked, notice, margin))
         if tag in self.SKIP:
             self.skip += 1
         if marked:
             self.marked_depth += 1
         if notice:
             self.notice_depth += 1
+        if margin:
+            self.margin_depth += 1
 
     def handle_endtag(self, tag):
         if tag in self.VOID:
             return
         for i in range(len(self.stack) - 1, -1, -1):
             if self.stack[i][0] == tag:
-                for _, skip, marked, notice in self.stack[i:]:
+                for _, skip, marked, notice, margin in self.stack[i:]:
                     self.skip -= skip
                     self.marked_depth -= marked
                     self.notice_depth -= notice
+                    self.margin_depth -= margin
                 del self.stack[i:]
                 break
+        if tag in self.BLOCK and not self.skip:
+            self._emit("\n", False)
 
     def handle_data(self, data):
         if self.skip:
             return
         self.parts.append(data)
-        if not self.marked_depth:
-            self.clean_parts.append(data)
+        self._emit(data, self.margin_depth > 0, clean=not self.marked_depth)
         if self.notice_depth:
             self.notice_parts.append(data)
 
@@ -718,8 +757,9 @@ class PageText(HTMLParser):
         p = cls()
         p.feed(html_text)
         p.close()
-        p.text = " ".join(p.parts)
-        p.clean = " ".join(p.clean_parts)
+        p.text = "".join(p.buf)
+        p.margin = p.mask
+        p.clean = "".join(p.clean_parts)
         p.notice_text = " ".join(p.notice_parts)
         return p
 
@@ -734,6 +774,64 @@ def squash(text, nfkc=False):
     return "".join(ch for ch in text if not ch.isspace() and unicodedata.category(ch) not in ("Cf", "Cc"))
 
 
+LINE_BREAKS = "\n\r\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029"
+
+
+def _word(c):
+    return c.isascii() and c.isalnum()
+
+
+def normalize(text, nfkc=False, margin=None):
+    """比较用的文字，返回 (文字, 页边标记)。
+
+    空白只在两个英文字母或数字之间保留一个：同一行里的空格写成 " "；只有换行时写成 "\n"，
+    表示这里可能本来是空格（PDF 自动换行处不画空格），也可能是长词断开。其余空白都去掉，
+    所以中文断行、全角空格、“18 %”和“18%”这类版面差异不影响结果，“now here”和“nowhere”仍能分开。
+    """
+    if margin is not None and len(margin) != len(text):
+        margin = None
+    chars = []
+    for i, ch in enumerate(text):
+        mk = bool(margin[i]) if margin is not None else False
+        for c in (unicodedata.normalize("NFKC", ch) if nfkc else ch):
+            if c.isspace():
+                chars.append(("\n" if c in LINE_BREAKS else " ", mk))
+            elif unicodedata.category(c) not in ("Cf", "Cc"):
+                chars.append((c, mk))
+    out, mask = [], []
+    i = 0
+    while i < len(chars):
+        c, mk = chars[i]
+        if c in " \n":
+            j = i
+            only_break = True
+            while j < len(chars) and chars[j][0] in " \n":
+                only_break = only_break and chars[j][0] == "\n"
+                j += 1
+            if out and j < len(chars) and _word(out[-1]) and _word(chars[j][0]):
+                out.append("\n" if only_break else " ")
+                mask.append(mk)
+            i = j
+            continue
+        out.append(c)
+        mask.append(mk)
+        i += 1
+    return "".join(out), mask
+
+
+def piece_pattern(norm):
+    """一段源稿文字在页面里的匹配式：源稿的空格可以对上空格或换行；两个英文字符之间可以夹一个换行（长词断开）。"""
+    out = []
+    for k, c in enumerate(norm):
+        if c == " ":
+            out.append("[ \n]")
+            continue
+        out.append(re.escape(c))
+        if k + 1 < len(norm) and _word(c) and _word(norm[k + 1]):
+            out.append("\n?")
+    return re.compile("".join(out))
+
+
 class Pieces(list):
     """[(行号, 文字)]。groups 把几行并成一组：组内先后不限（例如页头里目标岗位排在姓名旁边，
     “>”稿件提示写在岗位前面也行），组与组之间仍按源稿先后。"""
@@ -744,7 +842,8 @@ class Pieces(list):
 
 
 def source_pieces(text):
-    """源稿里页面必须显示的文字，按行给出 (行号, 文字)。故意不复用解析器，用来独立核对。"""
+    """源稿里页面必须显示的文字，按行给出 (行号, 文字)。不复用解析器，用来独立核对；
+    加粗、斜体、行内代码和反斜杠转义按渲染时的同一套规则去掉符号（“A\\*”“`a*b`”“3*4”里的星号都保留）。"""
     out = Pieces()
     in_header = False
     for ln, raw in enumerate(text.splitlines(), 1):
@@ -771,8 +870,7 @@ def source_pieces(text):
         else:
             pieces = [s]
         for p in pieces:
-            p = re.sub(r"\\([%s])" % re.escape(ASCII_PUNCT), r"\1", p)
-            p = p.replace("*", "").replace("`", "")
+            p = _restore_escapes(_strip_markup(_protect_escapes(p))[0])
             if squash(p):
                 out.append((ln, p))
     return out
@@ -785,7 +883,8 @@ class TextDiff(object):
     broken：字符都在、但没有原样连续出现的段（数字对调、改写、挪到别处），[(行号, 文字)]；
     lines：缺字所在的段；
     order：位置和源稿不同的行（例如一条成果挪到了别的经历下），算问题；
-    extra：页面里多出来、源稿没有的文字（例如把一条成果多复制给另一段经历），[(前一行行号, 文字)]。
+    fields：条目头里公司、岗位等字段的先后和源稿不同（例如公司和岗位对调），时间可以排在任何位置；
+    extra：页面里多出来、源稿和模板都没有的文字（例如把一条成果多复制给另一段经历），[(前一行行号, 文字)]。
     """
 
     def __init__(self):
@@ -793,15 +892,23 @@ class TextDiff(object):
         self.broken = []
         self.lines = []
         self.order = []
+        self.fields = []
         self.extra = []
 
+    def problem_lines(self):
+        return self.lines + self.broken + self.order + self.fields + self.extra
 
-# 版面自己加的字符：条目头的分隔符、要点符号。只有全是这些字符的剩余文字才不算多出来。
+
+# 版面自己加的字符：空白、条目头的分隔符、要点符号。只有全是这些字符的剩余文字才不算多出来；
 # 数字、字母、汉字和 %、+、# 这类会改变意思的符号都算内容（“18”写成“18%”、“C”写成“C++”）。
-LAYOUT_CHARS = set("｜|▪•·●◦∙‧■□◆◇▸►–—-/:：,，、;；")
-# 页面里可以有、源稿里没有的文字：常见的页眉和页码。紧挨着数字的不算页码（“18”写成“180”）。
-EXTRA_OK_RE = re.compile(r"^(?:个人简历|简历|履历|resume|cv|curriculumvitae|\d{1,2}|\d{1,2}/\d{1,2}|"
-                         r"第\d{1,2}页(?:共\d{1,2}页)?|page\d{1,2}(?:of\d{1,2})?)$", re.I)
+LAYOUT_CHARS = set(" \n｜|▪•·●◦∙‧■□◆◇▸►–—-/:：,，、;；")
+# 紧挨数字时会改变意思的符号：“18%”写成“-18%”、“18”写成“18/20”。
+SIGN_CHARS = set("-–—/+±−")
+# 常见页眉，在哪都不算多出来。
+HEADER_WORDS_RE = re.compile(r"^(?:个人简历|简历|履历|resume|cv|curriculumvitae)$", re.I)
+# 页码：只有落在页边（PDF 上下边距、HTML 页脚）里才不算多出来。
+PAGE_NO_RE = re.compile(r"^(?:[-–—]?\d{1,3}[-–—]?|\d{1,3}/\d{1,3}|第\d{1,3}页(?:[,，/]?共\d{1,3}页)?|"
+                        r"page\d{1,3}(?:of\d{1,3})?)$", re.I)
 
 
 def _meaningful(run):
@@ -809,72 +916,94 @@ def _meaningful(run):
     return "".join(ch for ch in run if ch not in LAYOUT_CHARS)
 
 
-def compare_text(pieces, page_text, nfkc, allowed=""):
+def compare_text(pieces, page_text, nfkc, template=(), margin=None):
     """逐段核对页面文字和源稿：内容一样、先后一样、没有多出来的。
 
-    - 每段（标题的一段、一条要点、一行信息）在页面里原样连续出现；
-    - 行与行按源稿先后出现，下一行从上一行结束之后找起。同一行拆成的几段（公司、岗位、时间）
-      和页头各行（pieces.groups）组内先后不限；
-    - 每段占用页面里的一处文字，不和别的段共用；全部对上之后页面里还剩下的文字（去掉标点、
-      符号和 allowed 里模板自带的文字，常见页眉页码除外）就是多出来的。
-    比较前去掉所有空白，断行、版面换行不影响结果。
+    - 每段（标题的一段、一条要点、一行信息）在页面里原样连续出现，英文词与词之间的空格也要对上；
+    - 行与行按源稿先后出现，下一行从上一行结束之后找起。页头各行（pieces.groups）先后不限；
+      同一条目头拆成的几段（公司、岗位、时间）里，时间可以排在任何位置，其余按源稿先后；
+    - 每段占用页面里的一处文字，不和别的段共用。template 是模板自带的固定文字（每个文字节点一段），
+      可以不出现，出现时各占用一处：只剩半截（“作品履历”写成“作品”）或多出一份都会剩下文字；
+    - 全部对上之后页面里还剩下的文字就是多出来的。只有分隔符、要点符号、常见页眉，
+      以及 margin 标出的页边里的页码不算。
     """
-    page = squash(page_text, nfkc)
-    allowed = squash(allowed, nfkc)
+    page, mask = normalize(page_text, nfkc, margin)
+    flat = page.replace(" ", "").replace("\n", "")
     groups = getattr(pieces, "groups", {})
     diff = TextDiff()
     want = Counter()
-    for _, p in pieces:
-        want.update(squash(p, nfkc))
-    diff.missing = Counter(want) - Counter(page)
     rows = []
     for ln, p in pieces:
-        sp = squash(p, nfkc)
-        if not sp:
-            continue
-        key = groups.get(ln, ln) if ln else None
-        if sp in page:
+        norm = normalize(p, nfkc)[0]
+        want.update(norm.replace(" ", ""))
+        if norm:
+            key = groups.get(ln, ln) if ln else None
+            item = (piece_pattern(norm), p)
             if rows and key is not None and rows[-1][0] == key:
-                rows[-1][2].append((sp, p))
+                rows[-1][2].append(item)
             else:
-                rows.append((key, ln, [(sp, p)]))
-        elif any(ch in diff.missing for ch in sp):
-            diff.lines.append((ln, p.strip()))
-        else:
-            diff.broken.append((ln, p.strip()))
+                rows.append((key, ln, [item]))
+    diff.missing = want - Counter(flat)
 
-    owner = [0] * len(page)     # 每个字被哪一行占用；0 表示还没被占用
+    owner = [0] * len(page)     # 每个字被哪一行占用；0 表示还没被占用，-1 表示模板文字
     used = [False] * len(page)
 
-    def find_free(sp, start):
-        i = page.find(sp, start)
-        while i >= 0 and any(used[i:i + len(sp)]):
-            i = page.find(sp, i + 1)
-        return i
+    def find_free(pat, start):
+        pos = start
+        while pos <= len(page):
+            mt = pat.search(page, pos)
+            if mt is None:
+                return None
+            if mt.end() > mt.start() and not any(used[mt.start():mt.end()]):
+                return mt
+            pos = mt.start() + 1
+        return None
 
-    def take(i, n, ln):
-        for k in range(i, i + n):
+    def take(mt, ln):
+        for k in range(mt.start(), mt.end()):
             used[k] = True
             owner[k] = ln or -1
 
     cursor = 0
-    for _, ln, group in rows:
+    for key, ln, group in rows:
+        absent = [raw for pat, raw in group if pat.search(page) is None]
+        if absent:
+            for raw in absent:
+                target = diff.lines if any(ch in diff.missing for ch in squash(raw, nfkc)) else diff.broken
+                target.append((ln, raw.strip()))
+            group = [g for g in group if g[1] not in absent]
+            if not group:
+                continue
         # 组内长的先占位置，短的再找剩下的：“北京大学计算机学院｜计算机”里专业不会落进院名
-        ends = []
-        for sp, _ in sorted(group, key=lambda g: -len(g[0])):
-            i = find_free(sp, cursor)
-            if i < 0:
+        found = {}
+        for idx, (pat, raw) in sorted(enumerate(group), key=lambda g: -len(g[1][1])):
+            mt = find_free(pat, cursor)
+            if mt is None:
                 break
-            take(i, len(sp), ln)
-            ends.append(i + len(sp))
-        if len(ends) == len(group):
-            cursor = min(ends)
+            take(mt, ln)
+            found[idx] = mt
+        if len(found) == len(group):
+            cursor = min(mt.end() for mt in found.values())
+            if key == ln and len(group) > 1:
+                last_is_date = bool(DATE_RE.search(group[-1][1]))
+                fixed = [found[i].start() for i in range(len(group) - (1 if last_is_date else 0))]
+                if fixed != sorted(fixed):
+                    diff.fields.append((ln, "｜".join(raw.strip() for _, raw in group)))
         else:
             diff.order.append((ln, group[0][1].strip()))
-            for sp, _ in group:
-                i = find_free(sp, 0)
-                if i >= 0:
-                    take(i, len(sp), ln)
+            for idx, (pat, raw) in enumerate(group):
+                if idx not in found:
+                    mt = find_free(pat, 0)
+                    if mt is not None:
+                        take(mt, ln)
+
+    for t in template:
+        norm = normalize(t, nfkc)[0]
+        if not norm:
+            continue
+        mt = find_free(piece_pattern(norm), 0)
+        if mt is not None:
+            take(mt, 0)
 
     if not diff.lines and not diff.broken:
         k = 0
@@ -887,12 +1016,19 @@ def compare_text(pieces, page_text, nfkc, allowed=""):
                 j += 1
             run = page[k:j]
             words = _meaningful(run)
-            by_digit = (k > 0 and page[k - 1].isdigit()) or (j < len(page) and page[j].isdigit())
-            page_no = any(ch.isdigit() for ch in words)
-            ok = bool(EXTRA_OK_RE.match(words)) and not (page_no and by_digit)
-            if words and not ok and words not in _meaningful(allowed):
+            core = "".join(ch for ch in run if ch not in " \n")
+            in_margin = all(mask[x] for x in range(k, j) if page[x] not in " \n")
+            signs = [x for x in range(k, j) if page[x] in SIGN_CHARS and
+                     ((x > 0 and page[x - 1].isdigit()) or (x + 1 < len(page) and page[x + 1].isdigit()))]
+            if in_margin and core and PAGE_NO_RE.match(core):
+                ok = True
+            elif signs:
+                ok = False
+            else:
+                ok = not words or bool(HEADER_WORDS_RE.match(words))
+            if not ok:
                 before = next((owner[x] for x in range(k - 1, -1, -1) if owner[x]), 0)
-                diff.extra.append((max(before, 0), run))
+                diff.extra.append((max(before, 0), run.strip(" \n").replace("\n", " ")))
             k = j
     return diff
 
@@ -1541,7 +1677,7 @@ class TextRun(object):
     def __init__(self, doc):
         self.doc = doc
         self.font_cache = {}
-        self.texts = []
+        self.chunks = []        # (文字, 基线高度)
         self.ys = []
         self.unmapped = 0
         self.used_fonts = []
@@ -1641,10 +1777,11 @@ class TextRun(object):
             text, unm = font.decode(bs)
             self.unmapped += unm
             if text:
-                self.texts.append(text)
+                x, y = tm[4], tm[5]
+                y = ctm[1] * x + ctm[3] * y + ctm[5]
+                self.chunks.append((text, y))
                 if text.strip():
-                    x, y = tm[4], tm[5]
-                    self.ys.append(ctm[1] * x + ctm[3] * y + ctm[5])
+                    self.ys.append(y)
 
 
 class PDFInfo(object):
@@ -1654,7 +1791,8 @@ class PDFInfo(object):
         self.pages = None
         self.fonts = []
         self.cmap_radicals = []     # (字体, 字符)
-        self.text = None            # 提取出的文字；None 表示没能提取
+        self.text = None            # 提取出的文字，换行处有 "\n"；None 表示没能提取
+        self.margin = None          # 与 text 逐字对应：这个字是否在页面上下边距里（页码只在这里放过）
         self.text_note = ""         # 没能提取或部分提取的原因
         self.unmapped = 0
         self.fill = None
@@ -1662,6 +1800,20 @@ class PDFInfo(object):
         self.not_embedded = []
         self.font_count = 0
         self.font_kinds = 0
+
+
+MARGIN_BAND = 56.7   # pt（2 cm）：离上下纸边这么近、整行只有页码的那一行算页眉页脚
+
+
+def page_band(doc, box):
+    """页面上下页边的分界：(下界, 上界)，基线低于下界或高于上界的行可能是页眉页脚。读不出页面大小时返回 (None, None)。"""
+    try:
+        b = [float(doc.resolve(v)) for v in box]
+    except (TypeError, ValueError):
+        return None, None
+    if len(b) != 4 or b[3] - b[1] <= 2 * MARGIN_BAND:
+        return None, None
+    return b[1] + MARGIN_BAND, b[3] - MARGIN_BAND
 
 
 def analyze_pdf(data):
@@ -1693,6 +1845,7 @@ def analyze_pdf(data):
         run = TextRun(doc)
         last_ys = []
         last_box = None
+        parts, marks = [], []
         for page in pages:
             contents = doc.resolve(page.get("Contents"))
             if isinstance(contents, Stream):
@@ -1704,13 +1857,30 @@ def analyze_pdf(data):
                     chunks.append(doc.stream_data(c))
             res = doc.resolve(page.get("Resources"))
             start = len(run.ys)
+            first = len(run.chunks)
             run.run(b"\n".join(chunks), res if isinstance(res, dict) else {}, IDENT)
             last_ys = run.ys[start:]
             last_box = doc.resolve(page.get("MediaBox"))
+            bottom, top = page_band(doc, last_box)
+            lines = []
+            for text, y in run.chunks[first:]:
+                if lines and abs(y - lines[-1][0]) <= 2:
+                    lines[-1][1].append(text)
+                else:
+                    lines.append((y, [text]))
+            for y, texts in lines:
+                line = "".join(texts)
+                footer = (bottom is not None and (y < bottom or y > top)
+                          and bool(PAGE_NO_RE.match(squash(line))))
+                parts.append(line)
+                marks.extend([footer] * len(line))
+                parts.append("\n")
+                marks.append(False)
         info.fonts = run.used_fonts
         info.unmapped = run.unmapped
         info.missing_tounicode = sorted(run.missing_tounicode)
-        info.text = "".join(run.texts)
+        info.text = "".join(parts)
+        info.margin = marks
         if last_ys and isinstance(last_box, list) and len(last_box) == 4:
             box = [float(doc.resolve(v)) for v in last_box]
             height = box[3] - box[1]
@@ -1866,9 +2036,9 @@ def check_source_text(report, src_text):
                        "源稿", "把这些字符改成正常汉字（多半是从 PDF 复制时带进来的）")
 
 
-def check_conservation(report, pieces, page, allowed=""):
-    """allowed：模板自带的文字（从源稿生成时），不算多出来的内容。"""
-    diff = compare_text(pieces, page.text, nfkc=False, allowed=allowed)
+def check_conservation(report, pieces, page, template=()):
+    """template：模板自带的固定文字（每个文字节点一段），各在页面里占一处，不算多出来的内容。"""
+    diff = compare_text(pieces, page.text, nfkc=False, template=template, margin=page.margin)
     total = sum(len(squash(p)) for _, p in pieces)
     ok = True
     if diff.missing:
@@ -1886,17 +2056,29 @@ def check_conservation(report, pieces, page, allowed=""):
                        "从这里起和源稿对不上：" + describe_lines(diff.order) + "（被挪动的行可能在它们前面）",
                        "以源稿为准把它们放回原来的经历；确实要调整顺序就先改源稿，再重新生成或打印")
         ok = False
+    if diff.fields:
+        report.problem("页面里条目头的字段先后和源稿不同（例如公司和岗位对调）", describe_lines(diff.fields),
+                       "按源稿的“名称｜岗位或专业｜时间”放回各自的位置；时间排在哪都行")
+        ok = False
     if diff.extra:
         report.problem("页面里多出了源稿没有的文字（例如把一条成果多复制给了另一段经历）",
                        describe_extra(diff.extra),
                        "删掉多出来的内容；确实要加就先写进源稿，再重新生成或打印。"
                        "是自定义模板自带的固定文字时，加 --template 指定那份模板")
         ok = False
+
     if ok:
         report.check("通过", "内容守恒", "源稿 %d 个可见字符全部进入页面，每行原样连续出现，没有多出的文字" % total)
     else:
         report.check("问题", "内容守恒", "页面和源稿对不上")
-    return set(ln for ln, _ in diff.lines + diff.broken + diff.order + diff.extra)
+    return set(ln for ln, _ in diff.problem_lines())
+
+
+def body_gaps(res):
+    """正文缺什么：一个栏目都没有，或者有栏目下面是空的。"""
+    if not res.sections:
+        return ["整份源稿只有页头，一个栏目都没有"]
+    return ["栏目“%s”下面是空的（第 %d 行）" % (sec.title, sec.lineno) for sec in res.sections if not sec.items]
 
 
 def check_final_source(report, src_text, res, sample=False):
@@ -1910,6 +2092,10 @@ def check_final_source(report, src_text, res, sample=False):
         if n:
             hits.append((ln, n))
     flagged = {"pending": False, "notice": False, "sample": False}
+    gaps = body_gaps(res)
+    if gaps:
+        report.problem("正式稿的正文不完整：%s" % "；".join(gaps), "源稿",
+                       "补上经历内容，或删掉空栏目；只有页头的稿子不能当投递稿")
     if hits:
         total = sum(n for _, n in hits)
         where = "、".join("第 %d 行%s" % (ln, "（%d 处）" % n if n > 1 else "") for ln, n in hits)
@@ -1943,6 +2129,21 @@ def check_final_source(report, src_text, res, sample=False):
     return flagged
 
 
+# 整句就是一句声明时也算（“Do not submit.”“请勿投递。”单独成句）；句子里带着别的内容就不算。
+STANDALONE_DECLARATIONS = ("donotsubmit", "pleasedonotsubmit", "notforsubmission", "勿投递", "请勿投递",
+                           "仅供演练", "仅供练习", "演练材料", "虚构材料", "fictional", "fictitious")
+
+
+def standalone_declarations(text):
+    """按句号、问号、分号和换行切句，返回整句就是声明的那几句。"""
+    out = []
+    for seg in re.split(r"[.!?。！？;；\n]+", text):
+        core = re.sub(r"[\s\W_]+", "", seg).lower()
+        if core in STANDALONE_DECLARATIONS:
+            out.append(seg.strip())
+    return out
+
+
 def has_sample_mark(text, notice=False):
     """notice=True 表示 text 就是末尾的虚构提示本身；否则是整份页面或 PDF 的文字，只认整句式的声明。"""
     return any(phrase_in(w, text) for w in (NOTICE_MARK_WORDS if notice else SAMPLE_PHRASES))
@@ -1959,19 +2160,25 @@ def check_labels(report, text, where_desc, skip_draft_words=False, sample=False)
     skip_draft_words：源稿的空位或演练标记已经报过，页面文字里那些标记的原文不再重复报。
     sample：演练稿里本来就有“虚构”“演练”这类说法，不查也不提醒；草稿用语照查。
     """
-    found = [label for label in INTERNAL_LABELS if label in text]
+    found = [label for label in INTERNAL_LABELS if phrase_in(label, text)]
     found += sorted(set(FACT_ID_RE.findall(text)))
+    exp_ids = sorted(set(EXP_ID_RE.findall(text)))
+    if exp_ids:
+        report.warn("%s里有像经历编号的%s；是经历库的内部编号就删掉，真实的型号、故障码等不用改" %
+                    (where_desc, "、".join("“%s”" % e for e in exp_ids)))
     if not skip_draft_words:
         phrases = DRAFT_PHRASES if sample else DRAFT_PHRASES + SAMPLE_PHRASES
         found += [w for w in phrases if phrase_in(w, text)]
+        if not sample:
+            found += [d for d in standalone_declarations(text) if not any(phrase_in(f, d) for f in found)]
     if found:
         report.problem("页面文字里有内部标签或草稿、演练用语：%s" % "、".join("“%s”" % f for f in found), where_desc,
                        "删掉样式名、模板说明、经历编号和草稿用语，这些只放在单独记录里；"
                        "是演练稿就保留虚构声明，改用 --final --sample 并带上 --source 检查")
     if not skip_draft_words:
         covered = "".join(found)
-        hints = [w for w in DRAFT_HINT_WORDS if w in text and w not in covered
-                 and not (sample and w in SAMPLE_HINT_WORDS)]
+        hints = [w for w in DRAFT_HINT_WORDS if phrase_in(w, text) and w not in covered.lower()
+                 and not (sample and w in SAMPLE_HINT_WORDS + ("fictional", "do not submit"))]
         if hints:
             report.warn("%s里有这些词：%s。是草稿或演练用语就删掉再导出；属于真实经历（如“应急演练”“示例代码”）就不用改" %
                         (where_desc, "、".join("“%s”" % w for w in hints)))
@@ -2025,7 +2232,7 @@ def check_final_html(report, page, flagged, sample=False):
 
 def evaluate_pdf(report, info, max_pages, expected=None, expected_desc="", final=False,
                  final_flagged=None, html_checked=False, page_hint="", sample=False, page_reported=(),
-                 sample_marks=(), allowed=""):
+                 sample_marks=(), template=()):
     """page_reported：页面层已经报过的源稿行号，PDF 层同一行不再重复报。
     sample_marks：源稿或页面里末尾虚构提示的原文；给了就在 PDF 里找这句原文，没给才按声明用语找。
     """
@@ -2048,8 +2255,10 @@ def evaluate_pdf(report, info, max_pages, expected=None, expected_desc="", final
 
     if info.text is None:
         note = info.text_note or "没能从 PDF 提取文字"
-        report.warn("%s：部首字符、文字与源稿一致、残留 {{ 这几项没查。"
-                    "请用能解析 CID 字体的工具人工核对（macOS 可用预览复制全文，或 PDFKit）" % note)
+        report.text_unverified = True
+        report.problem("没能读取 PDF 的文字层（%s），文字、空位和声明都没核对" % note, "整份 PDF",
+                       "不能当作已核验的成品：换未加密、结构正常的 PDF（例如用脚本或浏览器重新导出）后再查；"
+                       "确实只能用这份时，用能解析 CID 字体的工具人工逐字核对")
         if info.cmap_radicals:
             _radical_problem(report, sorted(set(c for _, c in info.cmap_radicals)),
                              sorted(set(f for f, _ in info.cmap_radicals)), [])
@@ -2096,17 +2305,17 @@ def evaluate_pdf(report, info, max_pages, expected=None, expected_desc="", final
     if expected is None:
         report.check("未做", "文字与源稿一致", expected_desc or "没有源稿可对照（加 --source 才能核对）")
     else:
-        diff = compare_text(expected, text, nfkc=True, allowed=allowed)
+        diff = compare_text(expected, text, nfkc=True, template=template, margin=info.margin)
         total = sum(len(squash(p, True)) for _, p in expected)
         known = set(page_reported)
-        if known and all(ln in known for ln, _ in diff.lines + diff.broken + diff.order + diff.extra):
-            if diff.missing or diff.broken or diff.order or diff.extra:
+        if known and all(ln in known for ln, _ in diff.problem_lines()):
+            if diff.missing or diff.problem_lines():
                 report.check("问题", "文字与源稿一致", "和页面层同样的问题，见上方")
                 diff = None
-        bad = sum(diff.missing.values()) + len(diff.broken) + len(diff.order) + len(diff.extra) if diff else 0
+        bad = sum(diff.missing.values()) + len(diff.problem_lines()) if diff else 0
         if diff is None:
             pass
-        elif not diff.missing and not diff.broken and not diff.order and not diff.extra:
+        elif not diff.missing and not diff.problem_lines():
             report.check("通过", "文字与源稿一致",
                          "%s的 %d 个字符在 PDF 文字层里都找得到，每行原样连续出现、先后一致，没有多出的文字（NFKC 归一后比较）" %
                          (expected_desc, total))
@@ -2124,6 +2333,10 @@ def evaluate_pdf(report, info, max_pages, expected=None, expected_desc="", final
                 report.problem("PDF 里这些行和%s不一致（字都在，但顺序或位置变了，例如数字对调）" % expected_desc,
                                describe_lines(diff.broken),
                                "以源稿为准改回页面后重新导出；确实要改内容就先改源稿")
+            if diff.fields:
+                report.problem("PDF 里条目头的字段先后和%s不同（例如公司和岗位对调）" % expected_desc,
+                               describe_lines(diff.fields),
+                               "按源稿的“名称｜岗位或专业｜时间”放回各自的位置后重新导出；时间排在哪都行")
             if diff.extra:
                 report.problem("PDF 里多出了%s没有的文字（例如把一条成果多复制给了另一段经历）" % expected_desc,
                                describe_extra(diff.extra),
@@ -2356,10 +2569,10 @@ def candidate_fonts():
     return FONT_CANDIDATES[key][:3]
 
 
-def template_text(tpl):
-    """模板自带的可见文字（占位符和注释除外），自定义模板可能写了“个人简历”这类标题。"""
+def template_pieces(tpl):
+    """模板自带的固定文字，每个文字节点一段（占位符和注释除外）。自定义模板可能写了“个人简历”这类标题。"""
     bare = re.sub(r"<!--.*?-->", "", tpl, flags=re.S)
-    return PageText.of(re.sub(r"\{\{\w+\}\}", "", bare)).text
+    return [t for t in PageText.of(re.sub(r"\{\{\w+\}\}", "", bare)).parts if squash(t)]
 
 
 def run_markdown(args, report):
@@ -2378,8 +2591,11 @@ def run_markdown(args, report):
     check_source_text(report, src_text)
     if "{{" in html_text:
         report.problem("生成的页面里残留 {{", "HTML", "检查模板占位符或源稿里的“{{”")
-    allowed = template_text(tpl)
-    page_reported = check_conservation(report, pieces, page, allowed)
+    fixed = template_pieces(tpl)
+    page_reported = check_conservation(report, pieces, page, fixed)
+    if not args.final:
+        for gap in body_gaps(res):
+            report.warn("正文不完整：%s；投递前要补上内容或删掉空栏目" % gap)
     flagged = {}
     final_before = len(report.problems)
     if args.final:
@@ -2403,7 +2619,7 @@ def run_markdown(args, report):
     pdf_before = len(report.problems)
     evaluate_pdf(report, info, args.max_pages, pieces, "源稿", args.final, flagged, html_checked=True,
                  page_hint=layout.hint, sample=args.sample, page_reported=page_reported,
-                 sample_marks=[_strip_wrapper(t) for t, _ in res.notices], allowed=allowed)
+                 sample_marks=[_strip_wrapper(t) for t, _ in res.notices], template=fixed)
     final_found += count_final_problems(report, pdf_before)
     final_status(report, args.final, final_found, args.sample)
     write_output(report, out, data)
@@ -2418,7 +2634,9 @@ def count_final_problems(report, start):
 
 
 def final_status(report, final, found, sample=False):
-    if not final:
+    if final and getattr(report, "text_unverified", False):
+        report.check("未做", "正式稿检查", "PDF 文字没能读取，没法确认没有空位、草稿提示和演练声明")
+    elif not final:
         report.check("未做", "正式稿检查", "未带 --final，按初稿或待补稿处理")
     elif sample and found:
         report.check("问题", "正式稿检查", "空位、草稿提示、虚构标记或内部标签有 %d 项问题，见下方" % found)
@@ -2433,8 +2651,14 @@ def final_status(report, final, found, sample=False):
 
 
 def failed_pdf_dir():
-    """没通过检查的 PDF 放这里：系统临时目录下的固定文件夹，同名稿重跑时覆盖。"""
+    """没通过检查的 PDF 放这里：系统临时目录下的固定文件夹。"""
     return Path(tempfile.gettempdir()) / "getoffer-failed-pdf"
+
+
+def failed_pdf_path(out):
+    """按正式文件的完整路径分开存：不同目录里的同名稿互不覆盖，同一份稿重跑时更新自己的那一份。"""
+    key = hashlib.sha256(os.path.normcase(str(Path(out).resolve())).encode("utf-8")).hexdigest()[:10]
+    return failed_pdf_dir() / key / (Path(out).stem + "-未通过.pdf")
 
 
 def write_output(report, out, data):
@@ -2448,9 +2672,8 @@ def write_output(report, out, data):
         return
     kept = None
     try:
-        folder = failed_pdf_dir()
-        folder.mkdir(parents=True, exist_ok=True)
-        kept = folder / (out.stem + "-未通过.pdf")
+        kept = failed_pdf_path(out)
+        kept.parent.mkdir(parents=True, exist_ok=True)
         kept.write_bytes(data)
     except OSError:
         kept = None
@@ -2461,18 +2684,19 @@ def write_output(report, out, data):
         report.warn("%s 是之前生成的旧文件，这次没有覆盖，内容和当前源稿不一定一致；修好后重跑会更新" % out.resolve())
 
 
-def given_template_text(args):
+def given_template_pieces(args):
     """--html、--check-pdf 时 --template 指定的模板里自带的文字；没给就按自带模板（没有固定文字）。"""
     if not args.template:
-        return ""
-    return template_text(read_text(args.template, "模板"))
+        return []
+    return template_pieces(read_text(args.template, "模板"))
 
 
 def run_html(args, report):
     html_path = Path(args.html)
     html_text = read_text(html_path, "HTML 文件")
-    allowed = given_template_text(args)
-    out = resolve_out(args, html_path, [("--html 页面", html_path), ("--source 源稿", args.source)])
+    fixed = given_template_pieces(args)
+    out = resolve_out(args, html_path, [("--html 页面", html_path), ("--source 源稿", args.source),
+                                        ("--template 模板", args.template)])
     page = PageText.of(html_text)
     pieces = None
     flagged = {}
@@ -2483,7 +2707,7 @@ def run_html(args, report):
         src_text = read_text(args.source, "源稿")
         pieces = source_pieces(src_text)
         check_source_text(report, src_text)
-        page_reported = check_conservation(report, pieces, page, allowed)
+        page_reported = check_conservation(report, pieces, page, fixed)
     else:
         report.check("未做", "内容守恒", "没有 --source，无法对照源稿")
     final_before = len(report.problems)
@@ -2504,7 +2728,7 @@ def run_html(args, report):
     if pieces is not None:
         evaluate_pdf(report, info, args.max_pages, pieces, "源稿", args.final, flagged, html_checked=True,
                      page_hint=layout.hint, sample=args.sample, page_reported=page_reported,
-                     sample_marks=[page.notice_text] if page.notices else (), allowed=allowed)
+                     sample_marks=[page.notice_text] if page.notices else (), template=fixed)
     else:
         evaluate_pdf(report, info, args.max_pages, page.pieces(), "HTML 页面文字", args.final, flagged,
                      html_checked=True, page_hint=layout.hint, sample=args.sample,
@@ -2519,7 +2743,7 @@ def run_check_pdf(args, report):
     if not p.is_file():
         raise CannotRun("PDF 文件不存在：%s" % args.check_pdf)
     info = analyze_pdf(p.read_bytes())
-    allowed = given_template_text(args)
+    fixed = given_template_pieces(args)
     report.fact("文件", str(p.resolve()))
     report.fact("页数", page_count_fact(info))
     report.fact("字体", font_fact(info))
@@ -2544,7 +2768,7 @@ def run_check_pdf(args, report):
     labels_before = len(report.problems)
     evaluate_pdf(report, info, args.max_pages, pieces, "源稿" if pieces else "",
                  args.final, flagged, html_checked=False, sample=args.sample, sample_marks=marks,
-                 allowed=allowed)
+                 template=fixed)
     final_found += count_final_problems(report, labels_before)
     final_status(report, args.final, final_found, args.sample)
 

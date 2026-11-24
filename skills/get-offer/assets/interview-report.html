@@ -187,8 +187,18 @@
     }
     window.addEventListener("hashchange", openTarget);
     window.addEventListener("DOMContentLoaded", openTarget);
+    var openBeforePrint = null;
     window.addEventListener("beforeprint", function () {
-      document.querySelectorAll("details").forEach(function (d) { d.open = true; });
+      var cards = document.querySelectorAll("details");
+      openBeforePrint = Array.prototype.map.call(cards, function (d) { return d.open; });
+      cards.forEach(function (d) { d.open = true; });
+    });
+    window.addEventListener("afterprint", function () {
+      if (!openBeforePrint) { return; }
+      document.querySelectorAll("details").forEach(function (d, i) {
+        if (i < openBeforePrint.length) { d.open = openBeforePrint[i]; }
+      });
+      openBeforePrint = null;
     });
   </script>
 </body>
