@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="getoffer-style" content="暖纸书刊">
+  <meta name="getoffer-layout" content="inline footer split-meta">
+  <title>{{document_title}}</title>
+  <style>
+    :root {
+      --accent: #423831;
+      --ink: #2a2420;
+      --muted: #6a5f55;
+      --rule: #bbaa95;
+      --paper: #FCF9F2;
+      --line: 15.4pt;
+      --gap-section: 15pt;
+      --gap-heading: 6pt;
+      --gap-entry: 10pt;
+      --gap-block: 4pt;
+      --gap-item: 3pt;
+    }
+    /* 一页排不下时给 html 标签加 class="compact"，换成紧凑间距；字号不变。 */
+    html.compact {
+      --line: 14.2pt;
+      --gap-section: 10pt;
+      --gap-heading: 5pt;
+      --gap-entry: 7pt;
+      --gap-block: 3pt;
+      --gap-item: 1.5pt;
+    }
+    /* 整页暖白底：纸边距为 0，留白由 .resume-sheet 的内边距给出，分页后每页都补上同样的内边距 */
+    @page { size: A4; margin: 0; }
+    * { box-sizing: border-box; }
+    html { font-size: 10.3pt; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #e9e9e7;
+      font-family: "Microsoft YaHei", "微软雅黑", "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC", "Arial Unicode MS", "STHeiti", "Heiti SC", Arial, sans-serif;
+      font-size: 10.3pt;
+      line-height: var(--line);
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    h1, h2, p, ul { margin: 0; }
+    h1 { font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+    .target-role { font-weight: 700; overflow-wrap: anywhere; }
+    .meta p { color: var(--muted); font-size: 9.6pt; line-height: 14.5pt; overflow-wrap: anywhere; }
+    .meta .sep { margin: 0 .55em; color: var(--rule); }
+    .meta .meta-item { white-space: nowrap; }
+    .meta .meta-long { white-space: normal; overflow-wrap: break-word; }
+    .resume-section { margin-top: var(--gap-section); }
+    h2 { margin: 0 0 var(--gap-heading); font-size: 12.6pt; line-height: 16pt; break-after: avoid; page-break-after: avoid; }
+    .entry + .entry { margin-top: var(--gap-entry); }
+    .entry-head {
+      display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0 14pt;
+      break-inside: avoid; break-after: avoid; page-break-after: avoid;
+    }
+    .entry-title { flex: 1 1 220pt; min-width: 0; font-size: 10.8pt; line-height: 16pt; overflow-wrap: anywhere; }
+    .entry-title b { font-weight: 700; }
+    .entry-sub { margin-left: 1em; font-weight: 400; }
+    .entry-date { margin-left: auto; color: var(--muted); font-size: 9.6pt; line-height: 15pt; white-space: nowrap; }
+    .entry-role, .education-detail { margin: 1pt 0 0; color: var(--muted); font-size: 9.6pt; line-height: 15pt; }
+    .scope { margin: var(--gap-block) 0 0; }
+    .project { margin-top: var(--gap-block); }
+    .project-title { font-weight: 700; break-after: avoid; page-break-after: avoid; }
+    .points { margin: var(--gap-block) 0 0; padding-left: 13pt; }
+    .project .points { margin-top: var(--gap-item); }
+    .points li { margin: 0 0 var(--gap-item); padding-left: 1pt; overflow-wrap: anywhere; break-inside: avoid; page-break-inside: avoid; }
+    .points li:last-child { margin-bottom: 0; }
+    .theme { font-weight: 700; }
+    .skills p { margin: 0 0 var(--gap-item); overflow-wrap: anywhere; }
+    .skills p:last-child { margin-bottom: 0; }
+    .pending, .draft-note { color: #A8431B; background: #FBEDE6; padding: 0 2pt; border-radius: 2pt; }
+    .sample-notice { margin: var(--gap-section) 0 0; color: var(--muted); font-size: 7.5pt; line-height: 10pt; break-inside: avoid; }
+    .page-bg { display: none; }
+    .resume-sheet { width: 210mm; min-height: 297mm; margin: 10mm auto; padding: 17mm 18mm 15mm; background: var(--paper);
+                    -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+    .resume-header { padding-bottom: 9pt; border-bottom: .9pt solid #a38966; text-align: center; }
+    h1 { display: flex; align-items: center; justify-content: center; gap: 7mm; font-size: 25pt; letter-spacing: 3pt; color: var(--accent); }
+    h1::before, h1::after { content: ""; flex: 0 1 24mm; height: .6pt; background: var(--rule); }
+    .target-role { margin-top: 4pt; font-size: 13pt; font-weight: 600; letter-spacing: 1pt; }
+    .meta { margin-top: 5pt; }
+    h2 { font-size: 13pt; color: var(--accent); letter-spacing: .5pt; }
+    .resume-section + .resume-section { padding-top: var(--gap-section); border-top: .6pt solid #cebeaa; }
+    .points li::marker { color: #8a7660; }
+    .tail { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8mm; margin-top: var(--gap-section);
+            padding-top: var(--gap-section); border-top: .9pt solid #a38966; break-inside: avoid; }
+    .tail .resume-section { margin-top: 0; padding-top: 0; border-top: 0; min-width: 0; }
+    .tail .resume-section + .resume-section { padding-left: 6mm; border-left: .6pt solid #cebeaa; }
+    .tail h2 { font-size: 12pt; }
+    @media print {
+      body { background: var(--paper); }
+      .page-bg { display: block; position: fixed; left: 0; top: 0; right: 0; bottom: 0; background: var(--paper); z-index: -1; }
+      .resume-sheet { width: auto; min-height: 0; margin: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page-bg"></div>
+  <main class="resume-sheet">
+    <header class="resume-header">
+      <div class="identity">
+        <h1>{{name}}</h1>
+        <p class="target-role">{{target_role}}</p>
+      </div>
+      <div class="meta">{{meta_lines}}</div>
+    </header>
+    <!-- 结构说明：正文由脚本生成。条目 .entry，条目头 .entry-head 里是 .entry-title（公司或名称加粗，
+    岗位、专业放在 .entry-sub）和 .entry-date；要点 .points，主题标签 .theme；技能 .skills；
+    待补空位 .pending，页头稿件提示 .draft-note，演练提示 .sample-notice。正式稿删除本注释。 -->
+    {{sections}}
+    {{sample_notice}}
+  </main>
+</body>
+</html>

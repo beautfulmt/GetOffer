@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="getoffer-style" content="钴蓝边栏">
+  <meta name="getoffer-layout" content="aside inline num-accent split-meta">
+  <title>{{document_title}}</title>
+  <style>
+    :root {
+      --accent: #144BA9;
+      --ink: #1c2229;
+      --muted: #59616b;
+      --rule: #7c9cc7;
+      --side: #EAF2FB;
+      --side-w: 58mm;
+      --line: 15.4pt;
+      --gap-section: 15pt;
+      --gap-heading: 6pt;
+      --gap-entry: 10pt;
+      --gap-block: 4pt;
+      --gap-item: 3pt;
+    }
+    /* 一页排不下时给 html 标签加 class="compact"，换成紧凑间距；字号不变。 */
+    html.compact {
+      --line: 14.2pt;
+      --gap-section: 10pt;
+      --gap-heading: 5pt;
+      --gap-entry: 7pt;
+      --gap-block: 3pt;
+      --gap-item: 1.5pt;
+    }
+    /* 纸边距为 0，侧栏底色铺满整页高度；两栏的内边距在分页后每页都补上 */
+    @page { size: A4; margin: 0; }
+    * { box-sizing: border-box; }
+    html { font-size: 10.3pt; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #e9e9e7;
+      font-family: "Microsoft YaHei", "微软雅黑", "Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC", "Arial Unicode MS", "STHeiti", "Heiti SC", Arial, sans-serif;
+      font-size: 10.3pt;
+      line-height: var(--line);
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    h1, h2, p, ul { margin: 0; }
+    h1 { font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+    .target-role { font-weight: 700; overflow-wrap: anywhere; }
+    .meta p { color: var(--muted); font-size: 9.6pt; line-height: 14.5pt; overflow-wrap: anywhere; }
+    .meta .sep { margin: 0 .55em; color: var(--rule); }
+    .meta .meta-item { white-space: nowrap; }
+    .meta .meta-long { white-space: normal; overflow-wrap: break-word; }
+    .resume-section { margin-top: var(--gap-section); }
+    h2 { margin: 0 0 var(--gap-heading); font-size: 12.6pt; line-height: 16pt; break-after: avoid; page-break-after: avoid; }
+    .entry + .entry { margin-top: var(--gap-entry); }
+    .entry-head {
+      display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 0 14pt;
+      break-inside: avoid; break-after: avoid; page-break-after: avoid;
+    }
+    .entry-title { flex: 1 1 220pt; min-width: 0; font-size: 10.8pt; line-height: 16pt; overflow-wrap: anywhere; }
+    .entry-title b { font-weight: 700; }
+    .entry-sub { margin-left: 1em; font-weight: 400; }
+    .entry-date { margin-left: auto; color: var(--muted); font-size: 9.6pt; line-height: 15pt; white-space: nowrap; }
+    .entry-role, .education-detail { margin: 1pt 0 0; color: var(--muted); font-size: 9.6pt; line-height: 15pt; }
+    .scope { margin: var(--gap-block) 0 0; }
+    .project { margin-top: var(--gap-block); }
+    .project-title { font-weight: 700; break-after: avoid; page-break-after: avoid; }
+    .points { margin: var(--gap-block) 0 0; padding-left: 13pt; }
+    .project .points { margin-top: var(--gap-item); }
+    .points li { margin: 0 0 var(--gap-item); padding-left: 1pt; overflow-wrap: anywhere; break-inside: avoid; page-break-inside: avoid; }
+    .points li:last-child { margin-bottom: 0; }
+    .theme { font-weight: 700; }
+    .skills p { margin: 0 0 var(--gap-item); overflow-wrap: anywhere; }
+    .skills p:last-child { margin-bottom: 0; }
+    .pending, .draft-note { color: #A8431B; background: #FBEDE6; padding: 0 2pt; border-radius: 2pt; }
+    .sample-notice { margin: var(--gap-section) 0 0; color: var(--muted); font-size: 7.5pt; line-height: 10pt; break-inside: avoid; }
+    .side-bg { display: none; }
+    .resume-sheet { display: grid; grid-template-columns: var(--side-w) minmax(0, 1fr); width: 210mm; min-height: 297mm;
+                    margin: 10mm auto; background: white; }
+    .side { min-width: 0; padding: 18mm 6mm 14mm 9mm; background: var(--side); overflow-wrap: break-word;
+            -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+    .main { min-width: 0; padding: 18mm 13mm 14mm 9mm; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+    h1 { font-size: 24pt; color: var(--accent); letter-spacing: 1pt; }
+    .target-role { margin-top: 5pt; font-size: 12.5pt; }
+    .side .meta { margin-top: 9pt; }
+    .side .meta .meta-item { display: block; white-space: normal; }
+    .side .meta .sep { display: none; }
+    .side .resume-section { margin-top: 13mm; }
+    .side h2, .main h2 { padding-bottom: 3pt; border-bottom: .8pt solid var(--rule); }
+    .side h2 { font-size: 12pt; }
+    .main h2 { font-size: 14pt; }
+    .main .resume-section:first-child { margin-top: 0; }
+    .side .entry-head, .side .entry-title, .side .entry-date { display: block; margin: 0; }
+    .side .entry-sub { display: block; margin-left: 0; }
+    .side .entry-date { margin-top: 2pt; white-space: normal; }
+    .side .skills p { margin-bottom: 5pt; }
+    .main .entry-head { display: block; }
+    .main .entry-date { display: block; margin: 1pt 0 0; }
+    .main .entry-sub { margin-left: 1.2em; }
+    .num { color: var(--accent); font-weight: 700; }
+    .points li::marker { color: var(--accent); }
+    @media print {
+      body { background: white; }
+      .side-bg { display: block; position: fixed; left: 0; top: 0; bottom: 0; width: var(--side-w); background: var(--side); z-index: -1; }
+      .resume-sheet { width: auto; min-height: 0; margin: 0; background: transparent; }
+      .side { background: transparent; }
+    }
+  </style>
+</head>
+<body>
+  <div class="side-bg"></div>
+  <div class="resume-sheet">
+    <aside class="side">
+      <header class="resume-header">
+        <div class="identity">
+          <h1>{{name}}</h1>
+          <p class="target-role">{{target_role}}</p>
+        </div>
+        <div class="meta">{{meta_lines}}</div>
+      </header>
+      {{aside}}
+    </aside>
+    <!-- 结构说明：教育和技能类栏目由脚本放进左侧 aside，实习、项目等放进右侧正文。
+    要点里的数字由脚本标成 .num；待补空位 .pending，页头稿件提示 .draft-note，演练提示 .sample-notice。正式稿删除本注释。 -->
+    <main class="main">
+      {{sections}}
+      {{sample_notice}}
+    </main>
+  </div>
+</body>
+</html>

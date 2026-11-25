@@ -3,11 +3,17 @@
 """把简历 Markdown 源稿生成 PDF，并自动核验成品。只用 Python 3.8+ 标准库。
 
 用法
-  build_resume_pdf.py 源稿.md [--out 输出.pdf] [--final [--sample]] [--max-pages N] [--font 字体名] [--lang 语言]
+  build_resume_pdf.py 源稿.md [--style 样式] [--out 输出.pdf] [--final [--sample]] [--max-pages N] [--font 字体名] [--lang 语言]
   build_resume_pdf.py --html 已填好的页面.html [--source 源稿.md] [--out 输出.pdf] [--final [--sample]]
   build_resume_pdf.py --check-pdf 某.pdf [--source 源稿.md] [--final [--sample]] [--max-pages N]
 
-  默认在源稿旁生成同名 .pdf；模板默认取本脚本旁的 ../assets/resume-navy.html。
+  默认在源稿旁生成同名 .pdf；模板默认取本脚本旁的 ../assets/resume-navy.html（墨蓝商务）。
+  --style 换自带样式：classic 经典单栏、cobalt 钴蓝边栏、cinnabar 朱砂时间轴、pine 松绿成果版、
+  paper 暖纸书刊（也可写中文名或编号 1 到 5）。换样式只改排法，文字和每条经历的对应关系不变；
+  非默认样式的默认文件名是“源稿名-样式名.pdf”，不覆盖墨蓝商务那份。--check-pdf 复检这类 PDF
+  要加同一个 --style（成果版旁边的数字、边栏的先后要按样式核对）；--html 页面自带样式信息。
+  成果版只把原句已有、含义明确的结果（有前后值的变化、幅度、促成或覆盖的数量）放到经历旁，
+  访谈、回看、整理等过程数字不算；一段经历没有就不放。
   --out、--save-html 不能和源稿、模板、--html 页面或彼此是同一个文件（大小写不同、硬链接、
   符号链接也算），否则不运行（退出码 2）。
   页面语言：源稿几乎没有中文时按英文处理（lang="en"，文档标题以“Resume”结尾），--lang 可以指定。
@@ -113,7 +119,27 @@ EXIT_OK = 0
 EXIT_PROBLEM = 1
 EXIT_CANNOT_RUN = 2
 
-DEFAULT_TEMPLATE = Path(__file__).resolve().parent.parent / "assets" / "resume-navy.html"
+ASSETS = Path(__file__).resolve().parent.parent / "assets"
+DEFAULT_TEMPLATE = ASSETS / "resume-navy.html"
+# 可选样式：(英文名, 模板文件, 中文名, 编号)。编号 0 是默认的墨蓝商务。
+STYLES = (
+    ("navy", "resume-navy.html", "墨蓝商务", 0),
+    ("classic", "resume-classic.html", "经典单栏", 1),
+    ("cobalt", "resume-cobalt.html", "钴蓝边栏", 2),
+    ("cinnabar", "resume-cinnabar.html", "朱砂时间轴", 3),
+    ("pine", "resume-pine.html", "松绿成果版", 4),
+    ("paper", "resume-paper.html", "暖纸书刊", 5),
+)
+
+
+def find_style(value):
+    """按英文名、中文名或编号找样式，返回 (英文名, 模板路径, 中文名)；找不到抛 CannotRun。"""
+    key = (value or "").strip().lower()
+    for sid, fname, cname, num in STYLES:
+        if key in (sid, cname.lower(), str(num), "第%d套" % num, "第 %d 套" % num):
+            return sid, ASSETS / fname, cname
+    raise CannotRun("没有这个样式：%s" % value, hint="可选：" + "；".join(
+        "%s（%s，编号 %d）" % (cname, sid, num) for sid, _, cname, num in STYLES))
 BROWSER_ENV_VARS = ("GETOFFER_BROWSER", "CHROME_PATH")
 
 PENDING_RE = re.compile(r"\[待确认[：:][^\[\]]*\]")
@@ -519,6 +545,153 @@ def render_themed(text, lineno, warnings):
         render_inline(m.group(1), lineno, warnings), render_inline(m.group(2), lineno, warnings))
 
 
+LAYOUT_META_RE = re.compile(r"<meta\s+name=\"getoffer-layout\"\s+content=\"([^\"]*)\"", re.I)
+STYLE_META_RE = re.compile(r"<meta\s+name=\"getoffer-style\"\s+content=\"([^\"]*)\"", re.I)
+
+
+def template_layout(html_text):
+    """模板或页面自己声明的版式开关（<meta name="getoffer-layout">），没有就是墨蓝商务的默认排法。
+
+    inline：公司和岗位同一行；timeline：日期在左栏、有日期才画时间节点；metrics：经历旁放一个成果数字；
+    aside：教育和技能放进侧栏（模板里的 {{aside}}）；footer：结尾连着的教育、技能并成两栏；
+    key-bold：要点里的成果原句加粗；num-accent：要点里的数字换强调色；split-meta：信息行按“｜”拆开。
+    """
+    m = LAYOUT_META_RE.search(html_text or "")
+    return frozenset(m.group(1).split()) if m else frozenset()
+
+
+def template_style_name(html_text):
+    m = STYLE_META_RE.search(html_text or "")
+    return m.group(1) if m else ""
+
+
+# ---- 成果识别：只认原句里已有、含义明确的结果；访谈、回看、整理等过程数据不算
+_UNIT = (r"(?:万元|个百分点|百分点|小时|分钟|人次|个月|万|千|亿|%|％|秒|天|周|月|年|人|名|位|条|个|次|题|笔|单|家|元|"
+         r"件|篇|份|项|倍|所|场|ms|MB|GB|s|h)")
+_NUM = r"\d+(?:\.\d+)?\s*" + _UNIT + r"?"
+_QUAL = r"(?:约|近|超过|超|逾)?\s*"
+_UP_DOWN = r"(?:提升|提高|增长|增加|上升|增|涨|升|降低|下降|减少|缩短|压缩|降)"
+_OUTCOME = (r"(?:促成|达成|实现|带来|获得|获|节省|节约|覆盖|新增|带动|拿下|签约|吸引|获客|服务|产生|贡献|售出|卖出|"
+            r"成交|回收|筹得|募集|转化)")
+PROCESS_WORDS = ("访谈", "调研", "回看", "整理", "收集", "梳理", "阅读", "抽查", "抽取", "抽样", "标注", "复测", "对比",
+                 "走访", "问卷", "分析", "测试", "盘点", "统计", "撰写", "编写", "绘制", "画了", "画出")
+CHANGE_RE = re.compile(r"(?P<subj>[^，,；;。、！!？?（）()]{2,18}?)\s*(?P<q>" + _QUAL + r")(?:由|从)\s*(?P<a>" + _NUM +
+                       r")\s*" + _UP_DOWN + r"(?:到|至)\s*(?P<b>" + _NUM + r")")
+RATE_RE = re.compile(r"(?P<subj>[^，,；;。、！!？?（）()]{2,18}?)\s*(?P<verb>" + _UP_DOWN + r"|节省|节约)了?\s*(?P<v>" + _QUAL +
+                     r"\d+(?:\.\d+)?\s*(?:%|％|个百分点|倍))")
+OUTCOME_RE = re.compile(r"(?P<pre>[^，,；;。、！!？?（）()]{0,10}?)(?P<verb>" + _OUTCOME + r")了?\s*(?P<v>" + _QUAL +
+                        r"\d+(?:\.\d+)?\s*(?:万|千|亿)?\s*" + _UNIT + r")(?P<noun>[\u4e00-\u9fff]{0,4})")
+LEAD_WORDS_RE = re.compile(r"^(?:并且|并|使得|使|让|将|把|最终|最后|随后|后|同时|推动|帮助|令|从而|进而|其中|且)+")
+
+
+class Result(object):
+    """一句要点里的一个成果：phrase 是原句里的那一段（经典单栏加粗它），value、label 是成果版旁边显示的数字和说明。"""
+
+    def __init__(self, kind, phrase, value, label, rank):
+        self.kind, self.phrase, self.value, self.label, self.rank = kind, phrase, value, label, rank
+
+
+def _clean_label(text):
+    text = LEAD_WORDS_RE.sub("", (text or "").strip())
+    return re.sub(r"\s+", " ", text).strip(" ：:，,")
+
+
+def find_results(text):
+    """从一句要点（已去掉 Markdown 符号的纯文字）里找成果，按在句中的位置返回。"""
+    out = []
+    if "待确认" in text:
+        return out
+    for clause in re.split(r"[，,；;。！!？?]", text):
+        if not clause.strip():
+            continue
+        found = []
+        for m in CHANGE_RE.finditer(clause):
+            label = _clean_label(m.group("subj"))
+            if len(squash(label)) >= 2 and not any(w in label for w in PROCESS_WORDS):
+                a = (m.group("q").strip() + " " + m.group("a").strip()).strip()
+                found.append((m.start("subj") + (len(m.group("subj")) - len(m.group("subj").lstrip())),
+                              Result("change", clause[m.start("subj"):m.end()].strip(), "%s → %s" % (a, m.group("b").strip()),
+                                     label, 0)))
+        if not found:
+            for m in RATE_RE.finditer(clause):
+                label = _clean_label(m.group("subj")) + m.group("verb")
+                if len(squash(label)) >= 3 and not any(w in label for w in PROCESS_WORDS):
+                    found.append((m.start(), Result("rate", clause[m.start("subj"):m.end()].strip(), m.group("v").strip(),
+                                                    label, 1)))
+        if not found:
+            for m in OUTCOME_RE.finditer(clause):
+                pre = clause[:m.start("verb")]
+                if any(w in pre for w in PROCESS_WORDS):
+                    continue
+                label = _clean_label(m.group("pre")) + m.group("verb") + m.group("noun")
+                if len(squash(label)) >= 2:
+                    found.append((m.start("verb"), Result("outcome", clause[m.start("verb"):m.end()].strip(),
+                                                          m.group("v").strip(), label, 2)))
+        out.extend(r for _, r in sorted(found, key=lambda x: x[0]))
+    return [r for r in out if r.phrase and r.phrase in text]
+
+
+def plain_text(t):
+    """源稿一行要点去掉 Markdown 符号后的样子，和页面上显示的文字一致。"""
+    return _restore_escapes(_strip_markup(_protect_escapes(t))[0])
+
+
+def entry_bullets(items):
+    """条目里的全部要点（含项目分组里的），按源稿顺序给出 (文字, 行号)。"""
+    out = []
+    for item in items:
+        if isinstance(item, Project):
+            out.extend(entry_bullets(item.items))
+        elif item[0] == "bullet":
+            out.append((item[1], item[2]))
+    return out
+
+
+def entry_result(entry):
+    """一段经历最有代表性的一个成果：先看有前后值的变化，再看幅度，最后看结果数量；同类取最先出现的。
+    返回 (Result, 行号) 或 None。只在本段自己的要点里找，不同经历的数字不会串。"""
+    best = None
+    for text, ln in entry_bullets(entry.items):
+        for r in find_results(plain_text(text)):
+            if best is None or r.rank < best[0].rank:
+                best = (r, ln)
+    return best
+
+
+def _text_segments(html_text):
+    """把一段 HTML 切成 [(是不是文字, 片段)]，待补空位里的文字当作标签，不动。"""
+    out, depth = [], 0
+    for part in re.split(r"(<[^>]+>)", html_text):
+        if not part:
+            continue
+        if part.startswith("<"):
+            if part.startswith('<span class="pending"'):
+                depth += 1
+            elif part == "</span>" and depth:
+                depth -= 1
+            out.append((False, part))
+        else:
+            out.append((depth == 0, part))
+    return out
+
+
+def emphasize(html_text, raw, layout):
+    """按样式给要点加强调，只改标签不改文字：key-bold 把成果原句加粗，num-accent 把数字换强调色。"""
+    if "key-bold" in layout:
+        segs = _text_segments(html_text)
+        for r in find_results(plain_text(raw)):
+            target = htmllib.escape(r.phrase, quote=True)
+            for i, (is_text, part) in enumerate(segs):
+                if is_text and part.count(target) == 1:
+                    segs[i] = (False, part.replace(target, '<strong class="key">%s</strong>' % target))
+                    break
+        html_text = "".join(p for _, p in segs)
+    if "num-accent" in layout:
+        html_text = "".join(re.sub(r"\d+(?:[.,]\d+)?(?:\s?[%％])?", lambda m: '<span class="num">%s</span>' % m.group(0), p)
+                            if is_text else p for is_text, p in _text_segments(html_text))
+    return html_text
+
+
 def split_entry_parts(parts):
     parts = list(parts)
     date = None
@@ -527,7 +700,7 @@ def split_entry_parts(parts):
     return parts, date
 
 
-def _render_items(items, para_class, warnings, indent):
+def _render_items(items, para_class, warnings, indent, layout=frozenset()):
     out = []
     pad = " " * indent
     bullets = []
@@ -535,7 +708,7 @@ def _render_items(items, para_class, warnings, indent):
     def close():
         if bullets:
             out.append(pad + '<ul class="points">%s</ul>' % "".join(
-                "<li>%s</li>" % render_themed(t, ln, warnings) for t, ln in bullets))
+                "<li>%s</li>" % emphasize(render_themed(t, ln, warnings), t, layout) for t, ln in bullets))
             del bullets[:]
 
     for item in items:
@@ -543,7 +716,7 @@ def _render_items(items, para_class, warnings, indent):
             close()
             out.append(pad + '<div class="project"><p class="project-title">%s</p>' %
                        render_inline(item.title, item.lineno, warnings, quiet=True))
-            out.extend(_render_items(item.items, "scope", warnings, indent + 2))
+            out.extend(_render_items(item.items, "scope", warnings, indent + 2, layout))
             out.append(pad + "</div>")
         elif item[0] == "bullet":
             bullets.append((item[1], item[2]))
@@ -554,42 +727,113 @@ def _render_items(items, para_class, warnings, indent):
     return out
 
 
-def render_sections(res, warnings):
-    out = []
+def side_section(sec):
+    """侧栏和结尾两栏放的栏目：教育，或只有零散段落、没有条目的栏目（技能、证书）。"""
+    return sec.kind == "education" or (sec.items and not any(isinstance(i, Entry) for i in sec.items))
+
+
+def tail_sections(res):
+    """结尾连着的侧栏类栏目（至少两个时才并成两栏）。"""
+    tail = []
+    for sec in reversed(res.sections):
+        if not side_section(sec):
+            break
+        tail.insert(0, sec)
+    return tail if len(tail) >= 2 else []
+
+
+def aside_sections(res, layout):
+    return [sec for sec in res.sections if side_section(sec)] if "aside" in layout else []
+
+
+def render_sections(res, warnings, layout=frozenset()):
+    """返回 (正文栏目, 侧栏栏目) 两段 HTML。墨蓝商务和自定义模板没有版式开关，排法和以前一样。"""
+    aside = aside_sections(res, layout)
+    tail = tail_sections(res) if "footer" in layout else []
+    main_out, side_out = [], []
     for sec in res.sections:
-        out.append('<section class="resume-section">')
-        out.append("  <h2>%s</h2>" % render_inline(sec.title, sec.lineno, warnings, quiet=True))
-        loose = []
+        out = side_out if sec in aside else main_out
+        if tail and sec is tail[0]:
+            out.append('<div class="tail">')
+        _render_section(sec, out, warnings, layout)
+        if tail and sec is tail[-1]:
+            out.append("</div>")
+    return "\n    ".join(main_out), "\n    ".join(side_out)
 
-        def close_loose():
-            if loose:
-                out.append('  <div class="skills">%s</div>' % "".join(
-                    "<p>%s</p>" % render_themed(t, ln, warnings) for t, ln in loose))
-                del loose[:]
 
-        for item in sec.items:
-            if not isinstance(item, Entry):
-                loose.append((item[1], item[2]))
-                continue
-            close_loose()
-            parts, date = split_entry_parts(item.parts)
+def _inline_title(parts, warnings, lineno):
+    first = '<b>%s</b>' % render_inline(parts[0], lineno, warnings, quiet=True)
+    return first + "".join('<span class="entry-sub">%s</span>' % render_inline(p, lineno, warnings, quiet=True)
+                           for p in parts[1:])
+
+
+def _render_section(sec, out, warnings, layout):
+    out.append('<section class="resume-section">')
+    out.append("  <h2>%s</h2>" % render_inline(sec.title, sec.lineno, warnings, quiet=True))
+    loose = []
+
+    def close_loose():
+        if loose:
+            out.append('  <div class="skills">%s</div>' % "".join(
+                "<p>%s</p>" % render_themed(t, ln, warnings) for t, ln in loose))
+            del loose[:]
+
+    for item in sec.items:
+        if not isinstance(item, Entry):
+            loose.append((item[1], item[2]))
+            continue
+        close_loose()
+        parts, date = split_entry_parts(item.parts)
+        para_class = "education-detail" if sec.kind == "education" else "scope"
+        if "inline" in layout:
+            head = '<p class="entry-title">%s</p>' % _inline_title(parts, warnings, item.lineno)
+            role = None
+        else:
             if sec.kind == "job" and len(parts) > 1:
                 title, role = parts[0], "｜".join(parts[1:])
             else:
                 title, role = "｜".join(parts), None
             head = '<p class="entry-title">%s</p>' % render_inline(title, item.lineno, warnings, quiet=True)
-            if date:
-                head += '<p class="entry-date">%s</p>' % render_inline(date, item.lineno, warnings, quiet=True)
+        date_html = ""
+        if date:
+            shown = render_inline(date, item.lineno, warnings, quiet=True)
+            if "timeline" in layout and sec.kind != "education":
+                shown = re.sub(r"\s*(至|到|–|—|-|~)\s*", r"<br>\1 ", shown, count=1)
+            date_html = '<p class="entry-date">%s</p>' % shown
+        body = _render_items(item.items, para_class, warnings, 6, layout)
+        result = entry_result(item) if ("metrics" in layout and sec.kind != "education") else None
+        timeline = "timeline" in layout and sec.kind != "education"
+        if timeline and date_html:
+            out.append('  <div class="entry timeline-entry">')
+            out.append("    " + date_html)
+            out.append('    <div class="record">')
+            out.append('      <div class="entry-head">%s</div>' % head)
+        elif timeline:
+            out.append('  <div class="entry timeline-entry no-date">')
+            out.append('    <div class="record">')
+            out.append('      <div class="entry-head">%s</div>' % head)
+        else:
             out.append('  <div class="entry">')
-            out.append('    <div class="entry-head">%s</div>' % head)
-            if role:
-                out.append('    <p class="entry-role">%s</p>' % render_inline(role, item.lineno, warnings, quiet=True))
-            para_class = "education-detail" if sec.kind == "education" else "scope"
-            out.extend(_render_items(item.items, para_class, warnings, 4))
-            out.append("  </div>")
-        close_loose()
-        out.append("</section>")
-    return "\n    ".join(out)
+            out.append('    <div class="entry-head">%s%s</div>' % (head, date_html))
+        if role:
+            out.append('    <p class="entry-role">%s</p>' % render_inline(role, item.lineno, warnings, quiet=True))
+        if result:
+            r = result[0]
+            out.append('    <div class="entry-body has-result"><div class="entry-main">')
+            out.extend(body)
+            out.append('    </div><div class="result"><p class="result-value">%s</p><p class="result-label">%s</p></div></div>'
+                       % (htmllib.escape(r.value), htmllib.escape(r.label)))
+        elif "metrics" in layout:
+            out.append('    <div class="entry-body">')
+            out.extend(body)
+            out.append("    </div>")
+        else:
+            out.extend(body)
+        if timeline:
+            out.append("    </div>")
+        out.append("  </div>")
+    close_loose()
+    out.append("</section>")
 
 
 def resume_lang(res):
@@ -623,6 +867,15 @@ def set_lang(html_text, lang):
     return html_text[:m.start()] + "<html" + attrs + ">" + html_text[m.end():]
 
 
+def _meta_item(text, lineno, warnings):
+    """信息行的一项。短的整项不断开；邮箱、网址这类长串只在 @ . - _ / 之后断行，不切开单词。"""
+    html = render_inline(text, lineno, warnings)
+    if len(text) <= 24 or not re.search(r"@|://|www\.", text):
+        return '<span class="meta-item">%s</span>' % html
+    html = re.sub(r"(@|\.|-|_|/)(?=[^<>]*(?:<|$))", r"\1<wbr>", html)
+    return '<span class="meta-item meta-long">%s</span>' % html
+
+
 def render_html(res, template_text, lang=None):
     """lang 为 None 时按 resume_lang 判断。"""
     warnings = res.warnings
@@ -637,8 +890,14 @@ def render_html(res, template_text, lang=None):
         role_html = render_inline(res.target_role[0], res.target_role[1], warnings)
     else:
         tpl = re.sub(r"\s*<p class=\"target-role\">\{\{target_role\}\}</p>", "", tpl)
+    layout = template_layout(template_text)
     meta = []
     for kind, t, ln in res.meta:
+        if kind != "note" and "split-meta" in layout:
+            parts = [x for x in SEP_RE.split(t) if x.strip()]
+            body = '<span class="sep">｜</span>'.join(_meta_item(x, ln, warnings) for x in parts)
+            meta.append("<p>%s</p>" % body)
+            continue
         body = render_inline(t, ln, warnings)
         meta.append('<p><span class="draft-note">%s</span></p>' % body if kind == "note" else "<p>%s</p>" % body)
     if not meta:
@@ -652,9 +911,9 @@ def render_html(res, template_text, lang=None):
         "name": name,
         "target_role": role_html,
         "meta_lines": "".join(meta),
-        "sections": render_sections(res, warnings),
         "sample_notice": notice,
     }
+    values["sections"], values["aside"] = render_sections(res, warnings, layout)
     # 一次性替换，源稿文字里出现的 {{xxx}} 不会被二次替换
     return set_lang(re.sub(r"\{\{(\w+)\}\}", lambda m: values.get(m.group(1), m.group(0)), tpl), lang)
 
@@ -865,6 +1124,9 @@ def source_pieces(text):
             pieces = [re.sub(r"^[-*+]\s+", "", s)]
         elif s.startswith(">"):
             pieces = [s.lstrip(">")]
+        elif in_header and ln in out.groups and not re.match(r"^#\s", s):
+            # 信息行按“｜”拆开：有的样式把联系方式排成几行，页头各行本来就先后不限
+            pieces = [x for x in SEP_RE.split(s) if x.strip()]
         elif bm:
             pieces = [bm.group(1)] + split_heading(bm.group(2))
         else:
@@ -874,6 +1136,57 @@ def source_pieces(text):
             if squash(p):
                 out.append((ln, p))
     return out
+
+
+def layout_pieces(src_text, res, layout):
+    """按样式要在页面上出现的源稿文字。
+
+    aside：侧栏（页头和侧栏栏目）和正文各自按源稿先后排，两栏之间不比先后；
+    metrics：每段经历旁的成果数字和说明紧跟在这段经历的最后一行之后，挪到别的经历旁会报先后不对。
+    """
+    base = source_pieces(src_text)
+    if not layout or res is None:
+        return base
+    lines = src_text.splitlines()
+    starts = sorted([sec.lineno for sec in res.sections] +
+                    [ln for ln, raw in enumerate(lines, 1) if HR_RE.match(raw.strip()) and res.sections
+                     and ln > res.sections[0].lineno] + [len(lines) + 1])
+
+    def end_of(start):
+        return min(x for x in starts if x > start) - 1
+
+    items, keys, streams = list(base), {}, {}
+    if "metrics" in layout:
+        entries = [(e, sec) for sec in res.sections for e in sec.items if isinstance(e, Entry)]
+        bounds = sorted([e.lineno for e, _ in entries] + starts)
+        for e, sec in reversed(entries):
+            if sec.kind == "education":
+                continue
+            found = entry_result(e)
+            if not found:
+                continue
+            last = min(x for x in bounds if x > e.lineno) - 1
+            at = max([i + 1 for i, (ln, _) in enumerate(items) if ln <= last] or [len(items)])
+            items[at:at] = [(found[1], found[0].value), (found[1], found[0].label)]
+    pieces = Pieces(items, base.groups)
+    if "metrics" in layout:
+        # 成果的两段各成一组：用条目的“成果”键，和那一行要点本身分开比先后
+        for e, sec in [(e, sec) for sec in res.sections for e in sec.items if isinstance(e, Entry)]:
+            found = entry_result(e) if sec.kind != "education" else None
+            if not found:
+                continue
+            for i, (ln, p) in enumerate(items):
+                if ln == found[1] and p in (found[0].value, found[0].label) and i not in keys:
+                    keys[i] = ("result", e.lineno)
+    if "aside" in layout:
+        side_lines = set(ln for ln, g in base.groups.items() if g == "header")
+        for sec in aside_sections(res, layout):
+            side_lines.update(range(sec.lineno, end_of(sec.lineno) + 1))
+        for i, (ln, _) in enumerate(items):
+            streams[i] = "aside" if ln in side_lines else "main"
+        pieces.stream_order = ["aside", "main"]
+    pieces.keys, pieces.streams = keys, streams
+    return pieces
 
 
 class TextDiff(object):
@@ -916,7 +1229,7 @@ def _meaningful(run):
     return "".join(ch for ch in run if ch not in LAYOUT_CHARS)
 
 
-def compare_text(pieces, page_text, nfkc, template=(), margin=None):
+def compare_text(pieces, page_text, nfkc, template=(), margin=None, strict_streams=False):
     """逐段核对页面文字和源稿：内容一样、先后一样、没有多出来的。
 
     - 每段（标题的一段、一条要点、一行信息）在页面里原样连续出现，英文词与词之间的空格也要对上；
@@ -926,23 +1239,31 @@ def compare_text(pieces, page_text, nfkc, template=(), margin=None):
       可以不出现，出现时各占用一处：只剩半截（“作品履历”写成“作品”）或多出一份都会剩下文字；
     - 全部对上之后页面里还剩下的文字就是多出来的。只有分隔符、要点符号、常见页眉，
       以及 margin 标出的页边里的页码不算。
+    pieces 分了几栏（边栏样式）时每栏各自按先后核对；strict_streams 时后一栏从前一栏最后一处之后找起
+    （HTML 里侧栏整个排在正文前面，侧栏内容挪进正文会报；PDF 里侧栏可能续到下一页，不这样要求）。
     """
     page, mask = normalize(page_text, nfkc, margin)
     flat = page.replace(" ", "").replace("\n", "")
     groups = getattr(pieces, "groups", {})
+    keys = getattr(pieces, "keys", {})
+    streams = getattr(pieces, "streams", {})
     diff = TextDiff()
     want = Counter()
     rows = []
-    for ln, p in pieces:
+    for i, (ln, p) in enumerate(pieces):
         norm = normalize(p, nfkc)[0]
         want.update(norm.replace(" ", ""))
         if norm:
-            key = groups.get(ln, ln) if ln else None
+            key = keys.get(i) or (groups.get(ln, ln) if ln else None)
+            st = streams.get(i, "main")
             item = (piece_pattern(norm), p)
-            if rows and key is not None and rows[-1][0] == key:
+            if rows and key is not None and rows[-1][0] == key and rows[-1][3] == st:
                 rows[-1][2].append(item)
             else:
-                rows.append((key, ln, [item]))
+                rows.append((key, ln, [item], st))
+    order = list(getattr(pieces, "stream_order", None) or ["main"])
+    order += [r[3] for r in rows if r[3] not in order]
+    rows = [r for st in order for r in rows if r[3] == st]
     diff.missing = want - Counter(flat)
 
     owner = [0] * len(page)     # 每个字被哪一行占用；0 表示还没被占用，-1 表示模板文字
@@ -965,7 +1286,12 @@ def compare_text(pieces, page_text, nfkc, template=(), margin=None):
             owner[k] = ln or -1
 
     cursor = 0
-    for key, ln, group in rows:
+    stream = None
+    stream_end = 0
+    for key, ln, group, st in rows:
+        if st != stream:
+            # 每一栏各自从页面开头找起（侧栏和正文分开比先后）；严格时从上一栏结束处找起
+            stream, cursor = st, (stream_end if strict_streams else 0)
         absent = [raw for pat, raw in group if pat.search(page) is None]
         if absent:
             for raw in absent:
@@ -984,6 +1310,7 @@ def compare_text(pieces, page_text, nfkc, template=(), margin=None):
             found[idx] = mt
         if len(found) == len(group):
             cursor = min(mt.end() for mt in found.values())
+            stream_end = max([stream_end] + [mt.end() for mt in found.values()])
             if key == ln and len(group) > 1:
                 last_is_date = bool(DATE_RE.search(group[-1][1]))
                 fixed = [found[i].start() for i in range(len(group) - (1 if last_is_date else 0))]
@@ -2038,7 +2365,7 @@ def check_source_text(report, src_text):
 
 def check_conservation(report, pieces, page, template=()):
     """template：模板自带的固定文字（每个文字节点一段），各在页面里占一处，不算多出来的内容。"""
-    diff = compare_text(pieces, page.text, nfkc=False, template=template, margin=page.margin)
+    diff = compare_text(pieces, page.text, nfkc=False, template=template, margin=page.margin, strict_streams=True)
     total = sum(len(squash(p)) for _, p in pieces)
     ok = True
     if diff.missing:
@@ -2064,7 +2391,8 @@ def check_conservation(report, pieces, page, template=()):
         report.problem("页面里多出了源稿没有的文字（例如把一条成果多复制给了另一段经历）",
                        describe_extra(diff.extra),
                        "删掉多出来的内容；确实要加就先写进源稿，再重新生成或打印。"
-                       "是自定义模板自带的固定文字时，加 --template 指定那份模板")
+                       "是自定义模板自带的固定文字时，加 --template 指定那份模板；"
+                       "换过样式（例如成果版旁边的数字）时，复检加同一个 --style")
         ok = False
 
     if ok:
@@ -2341,7 +2669,8 @@ def evaluate_pdf(report, info, max_pages, expected=None, expected_desc="", final
                 report.problem("PDF 里多出了%s没有的文字（例如把一条成果多复制给了另一段经历）" % expected_desc,
                                describe_extra(diff.extra),
                                "删掉多出来的内容后重新导出；确实要加就先写进源稿。"
-                               "是自定义模板自带的固定文字时，加 --template 指定那份模板")
+                               "是自定义模板自带的固定文字时，加 --template 指定那份模板；"
+                               "换过样式（例如成果版旁边的数字、边栏的先后）时，复检加同一个 --style")
             if diff.order:
                 report.problem("PDF 里这些行的位置和%s不同（例如一条成果挪到了别的经历下）" % expected_desc,
                                "从这里起和源稿对不上：" + describe_lines(diff.order) + "（被挪动的行可能在它们前面）",
@@ -2575,17 +2904,46 @@ def template_pieces(tpl):
     return [t for t in PageText.of(re.sub(r"\{\{\w+\}\}", "", bare)).parts if squash(t)]
 
 
+def style_template(args):
+    """(模板路径, 样式中文名)：--style 指定的样式，或 --template，或默认的墨蓝商务。"""
+    if getattr(args, "style", None):
+        sid, path, cname = find_style(args.style)
+        return path, cname
+    if args.template:
+        return Path(args.template), ""
+    return DEFAULT_TEMPLATE, "墨蓝商务"
+
+
+def styled_default_name(source, cname):
+    """换了非默认样式时默认文件名带样式名，不覆盖同版本已交付的墨蓝商务 PDF。"""
+    src = Path(source)
+    if not cname or cname == "墨蓝商务":
+        return src
+    return src.with_name("%s-%s%s" % (src.stem, cname, src.suffix or ".md"))
+
+
+def font_note(tpl, info):
+    """样式首选微软雅黑时，说明 PDF 实际用了什么字体。"""
+    if not re.search(r"font-family:\s*\"Microsoft YaHei\"", tpl) or not info.fonts:
+        return ""
+    if any("yahei" in f.lower() for f in info.fonts):
+        return "；样式首选的微软雅黑已嵌入"
+    return "；样式首选微软雅黑，本机没有，实际用的是上面这些字体"
+
+
 def run_markdown(args, report):
     src_text = read_text(args.source_md, "源稿")
-    template_path = Path(args.template) if args.template else DEFAULT_TEMPLATE
+    template_path, cname = style_template(args)
     tpl = read_text(template_path, "模板")
-    out = resolve_out(args, args.source_md, [("源稿", args.source_md), ("模板", template_path)])
+    out = resolve_out(args, styled_default_name(args.source_md, cname), [("源稿", args.source_md), ("模板", template_path)])
     res = parse_markdown(src_text)
     html_text = render_html(res, tpl, None if args.lang == "auto" else args.lang)
     for w in res.warnings:
         report.warn(w)
+    if cname:
+        report.fact("样式", cname)
     page = PageText.of(html_text)
-    pieces = source_pieces(src_text)
+    pieces = layout_pieces(src_text, res, template_layout(tpl))
     pending = len(PENDING_RE.findall(src_text))
 
     check_source_text(report, src_text)
@@ -2611,7 +2969,7 @@ def run_markdown(args, report):
         report.fact("HTML", str(Path(args.save_html).resolve()))
     report.fact("页数", page_count_fact(info))
     report.fact("间距", layout.note)
-    report.fact("字体", font_fact(info) + ("；按 --font/候选字体“%s”排在最前" % font if font else ""))
+    report.fact("字体", font_fact(info) + ("；按 --font/候选字体“%s”排在最前" % font if font else "") + font_note(tpl, info))
     if pending:
         report.fact("空位", "%d 处 [待确认：……]%s" % (pending, "" if args.final else "，已用橙色标出（待补稿，不能投递）"))
     else:
@@ -2685,10 +3043,20 @@ def write_output(report, out, data):
 
 
 def given_template_pieces(args):
-    """--html、--check-pdf 时 --template 指定的模板里自带的文字；没给就按自带模板（没有固定文字）。"""
+    """--html、--check-pdf 时 --template 或 --style 指定的模板里自带的文字；没给就按自带模板（没有固定文字）。"""
+    if getattr(args, "style", None):
+        return template_pieces(read_text(find_style(args.style)[1], "模板"))
     if not args.template:
         return []
     return template_pieces(read_text(args.template, "模板"))
+
+
+def given_layout(args):
+    if getattr(args, "style", None):
+        return template_layout(read_text(find_style(args.style)[1], "模板"))
+    if args.template:
+        return template_layout(read_text(args.template, "模板"))
+    return frozenset()
 
 
 def run_html(args, report):
@@ -2705,7 +3073,10 @@ def run_html(args, report):
         report.problem("HTML 里还有没替换的 {{ 占位符", str(html_path), "把所有占位符替换成内容或删掉对应元素")
     if args.source:
         src_text = read_text(args.source, "源稿")
-        pieces = source_pieces(src_text)
+        try:
+            pieces = layout_pieces(src_text, parse_markdown(src_text), template_layout(html_text))
+        except CannotRun:
+            pieces = source_pieces(src_text)
         check_source_text(report, src_text)
         page_reported = check_conservation(report, pieces, page, fixed)
     else:
@@ -2722,7 +3093,8 @@ def run_html(args, report):
     data, info, font, layout = print_with_retries(args, report, html_text, base_dir=html_path.parent)
     report.fact("页数", page_count_fact(info))
     report.fact("间距", layout.note)
-    report.fact("字体", font_fact(info) + ("；按 --font/候选字体“%s”排在最前" % font if font else ""))
+    report.fact("字体", font_fact(info) + ("；按 --font/候选字体“%s”排在最前" % font if font else "")
+                + font_note(html_text, info))
     report.fact("空位", "页面里 %d 处 .pending" % page.pending)
     pdf_before = len(report.problems)
     if pieces is not None:
@@ -2753,7 +3125,10 @@ def run_check_pdf(args, report):
     final_before = len(report.problems)
     if args.source:
         src_text = read_text(args.source, "源稿")
-        pieces = source_pieces(src_text)
+        try:
+            pieces = layout_pieces(src_text, parse_markdown(src_text), given_layout(args))
+        except CannotRun:
+            pieces = source_pieces(src_text)
         check_source_text(report, src_text)
         final_before = len(report.problems)
         report.fact("空位", "源稿 %d 处 [待确认：……]" % len(PENDING_RE.findall(src_text)))
@@ -2799,6 +3174,9 @@ def build_parser():
         prog="build_resume_pdf.py", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("source_md", nargs="?", help="简历 Markdown 源稿")
     ap.add_argument("--out", help="输出 PDF 路径（默认与输入同名，扩展名 .pdf）")
+    ap.add_argument("--style", help="简历样式：navy 墨蓝商务（默认）、classic 经典单栏、cobalt 钴蓝边栏、cinnabar 朱砂时间轴、"
+                                    "pine 松绿成果版、paper 暖纸书刊；也可写中文名或编号 1 到 5。"
+                                    "非默认样式的默认文件名带样式名；复检这类 PDF 时加同一个 --style")
     ap.add_argument("--template", help="HTML 模板（默认 ../assets/resume-navy.html）；配合 --html、--check-pdf 时"
                                        "说明成品用的模板，模板自带的固定文字不算多出来的内容")
     ap.add_argument("--final", action="store_true", help="按正式投递稿检查：空位、演练标记、内部标签算问题")
@@ -2848,6 +3226,10 @@ def main(argv=None):
                             hint="演练稿的最终版用 --final --sample；初稿和待补稿两个都不加")
         if args.max_pages < 1 or args.timeout < 1:
             raise CannotRun("--max-pages 和 --timeout 必须是正整数")
+        if args.style and args.template:
+            raise CannotRun("--style 和 --template 只能用一个", hint="自带样式用 --style，自己的模板用 --template")
+        if args.style:
+            find_style(args.style)
         if args.check_pdf and args.density != "auto":
             raise CannotRun("--density 只在生成或打印时有用，--check-pdf 不改版面")
         if args.check_pdf and args.sample and not args.source:

@@ -1,6 +1,6 @@
 # GetOffer
 
-帮助校招生和实习求职者从真实经历出发写改简历、按目标 JD 定制、准备与模拟面试并逐题复盘的 Agent Skill。当前版本 v1.8.6。
+帮助校招生和实习求职者从真实经历出发写改简历、按目标 JD 定制、准备与模拟面试并逐题复盘的 Agent Skill。当前版本 v1.9.0。
 
 ## 功能
 
@@ -41,6 +41,13 @@ ln -s "$HOME/GetOffer/skills/get-offer" "$HOME/.claude/skills/get-offer"
 - “按这份简历和 JD 模拟一面，问完再统一点评。”
 - “下周是 HR 面，帮我准备，再模拟一场。”
 - “刚面完二面，没有录音，帮我按回忆复盘。”
+- “简历有哪些样式？” “用钴蓝边栏导出。” “换第 4 套。”
+
+简历默认用墨蓝商务样式，另有五套可选：经典单栏、钴蓝边栏、朱砂时间轴、松绿成果版、暖纸书刊。换样式只改排版，不改内容；导出的 PDF 文件名带样式名，不覆盖之前的版本。命令行导出示例：
+
+```sh
+python3 skills/get-offer/scripts/build_resume_pdf.py resumes/通用版-v2.md --style cobalt --final
+```
 
 ## 文件与能力
 
