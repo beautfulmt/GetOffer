@@ -78,16 +78,16 @@
     .target-role { margin-top: 3pt; font-size: 13.5pt; }
     .meta { margin-top: 5pt; }
     h2 { font-size: 13pt; color: var(--accent); }
-    .resume-section + .resume-section { padding-top: var(--gap-section); border-top: .6pt solid #cdd7d1; }
+    .resume-sheet > .resume-section:has(+ .resume-section),
+    .resume-sheet > .resume-section:has(+ .tail) { padding-bottom: var(--gap-section); border-bottom: .6pt solid #cdd7d1; }
     .entry-body.has-result { display: grid; grid-template-columns: minmax(0, 1fr) 44mm; gap: 0 6mm; align-items: center; }
     .entry-main { min-width: 0; }
     .result { padding: 2pt 0 2pt 5mm; border-left: .8pt solid var(--rule); break-inside: avoid; }
     .result-value { color: var(--accent); font-size: 18pt; line-height: 21pt; font-weight: 700; letter-spacing: -.3pt; overflow-wrap: anywhere; }
     .result-label { margin-top: 2pt; color: var(--muted); font-size: 9.6pt; line-height: 13.5pt; overflow-wrap: anywhere; }
     .points li::marker { color: var(--accent); }
-    .tail { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8mm; margin-top: var(--gap-section);
-            padding-top: var(--gap-section); border-top: .6pt solid #cdd7d1; break-inside: avoid; }
-    .tail .resume-section { margin-top: 0; padding-top: 0; border-top: 0; min-width: 0; }
+    .tail { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8mm; margin-top: var(--gap-section); break-inside: avoid; }
+    .tail .resume-section { margin-top: 0; padding: 0; border: 0; min-width: 0; }
     .tail .resume-section + .resume-section { padding-left: 6mm; border-left: .6pt solid #cdd7d1; }
     .tail h2 { font-size: 12pt; }
     @media print {

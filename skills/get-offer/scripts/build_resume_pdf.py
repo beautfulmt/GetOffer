@@ -160,10 +160,12 @@ FONT_CANDIDATES = {
     "linux": ["Noto Sans CJK SC", "Source Han Sans SC", "WenQuanYi Micro Hei"],
 }
 
-# 正式稿里一定不该出现的内部标签：样式名、模板痕迹。
+STYLE_NAMES = tuple(cname for _, _, cname, _ in STYLES)
+# 正式稿里任何位置都不该出现的技术痕迹与模板标记；样式名按“独立标签或模板额外印出”单独判断，不误拦真实经历词组。
 INTERNAL_LABELS = (
-    "墨蓝商务", "resume-section", "entry-title", "entry-date", "entry-role",
-    "education-detail", "project-title", "sample-notice", "draft-note", 'class="', "{{", "}}",
+    "resume-section", "entry-title", "entry-date", "entry-role",
+    "education-detail", "project-title", "sample-notice", "draft-note",
+    "getoffer-layout", "getoffer-style", 'class="', "{{", "}}",
 )
 # 待补稿才会写的说法，任何正式稿里都算问题。源稿的标记已经单独报过时不再重复报。
 DRAFT_PHRASES = ("待补草稿", "待补稿")
@@ -565,23 +567,49 @@ def template_style_name(html_text):
     return m.group(1) if m else ""
 
 
-# ---- 成果识别：只认原句里已有、含义明确的结果；访谈、回看、整理等过程数据不算
-_UNIT = (r"(?:万元|个百分点|百分点|小时|分钟|人次|个月|万|千|亿|%|％|秒|天|周|月|年|人|名|位|条|个|次|题|笔|单|家|元|"
-         r"件|篇|份|项|倍|所|场|ms|MB|GB|s|h)")
-_NUM = r"\d+(?:\.\d+)?\s*" + _UNIT + r"?"
+# ---- 成果识别：只认原句里已有、含义明确且实际达成的结果；过程数据、未达目标和无法完整识别的数值都不算
+_MAG = r"(?:千万|百万|十万|万|千|亿)"
+_BASE_UNIT = (r"(?:个百分点|百分点|小时|分钟|人次|个月|%|％|秒|天|周|月|年|人|名|位|条|个|次|题|笔|单|家|元|"
+              r"件|篇|份|项|倍|所|场|ms|MB|GB|s|h)")
+_UNIT = r"(?:" + _MAG + r"\s*" + _BASE_UNIT + r"|" + _MAG + r"|" + _BASE_UNIT + r")"
+_DIGITS = r"(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?"
+_NUM = _DIGITS + r"(?:\s*" + _UNIT + r")?"
 _QUAL = r"(?:约|近|超过|超|逾)?\s*"
 _UP_DOWN = r"(?:提升|提高|增长|增加|上升|增|涨|升|降低|下降|减少|缩短|压缩|降)"
 _OUTCOME = (r"(?:促成|达成|实现|带来|获得|获|节省|节约|覆盖|新增|带动|拿下|签约|吸引|获客|服务|产生|贡献|售出|卖出|"
             r"成交|回收|筹得|募集|转化)")
 PROCESS_WORDS = ("访谈", "调研", "回看", "整理", "收集", "梳理", "阅读", "抽查", "抽取", "抽样", "标注", "复测", "对比",
                  "走访", "问卷", "分析", "测试", "盘点", "统计", "撰写", "编写", "绘制", "画了", "画出")
-CHANGE_RE = re.compile(r"(?P<subj>[^，,；;。、！!？?（）()]{2,18}?)\s*(?P<q>" + _QUAL + r")(?:由|从)\s*(?P<a>" + _NUM +
+CLAUSE_SPLIT_RE = re.compile(r"[，；;。！!？?]|(?<!\d),|,(?!\d)")
+CHANGE_RE = re.compile(r"(?P<subj>[^，,；;。、！!？?（）()]{1,20}?)\s*(?P<q>" + _QUAL + r")(?:由|从)\s*(?P<a>" + _NUM +
                        r")\s*" + _UP_DOWN + r"(?:到|至)\s*(?P<b>" + _NUM + r")")
-RATE_RE = re.compile(r"(?P<subj>[^，,；;。、！!？?（）()]{2,18}?)\s*(?P<verb>" + _UP_DOWN + r"|节省|节约)了?\s*(?P<v>" + _QUAL +
-                     r"\d+(?:\.\d+)?\s*(?:%|％|个百分点|倍))")
+RATE_RE = re.compile(r"(?P<subj>[^，,；;。、！!？?（）()]{1,20}?)\s*(?P<verb>" + _UP_DOWN + r"|节省|节约)了?\s*(?P<v>" + _QUAL +
+                     _DIGITS + r"\s*(?:%|％|个百分点|百分点|倍))")
 OUTCOME_RE = re.compile(r"(?P<pre>[^，,；;。、！!？?（）()]{0,10}?)(?P<verb>" + _OUTCOME + r")了?\s*(?P<v>" + _QUAL +
-                        r"\d+(?:\.\d+)?\s*(?:万|千|亿)?\s*" + _UNIT + r")(?P<noun>[\u4e00-\u9fff]{0,4})")
+                        _DIGITS + r"\s*" + _UNIT + r")(?P<noun>[\u4e00-\u9fff]{0,4})")
 LEAD_WORDS_RE = re.compile(r"^(?:并且|并|使得|使|让|将|把|最终|最后|随后|后|同时|推动|帮助|令|从而|进而|其中|且)+")
+ACTUAL_WORD_RE = re.compile(r"实际|实测|最终|现已")
+ACTUAL_LEAD_RE = re.compile(
+    r"^(?:但|而|不过)?\s*(?:目前|现已|最终|最后)?\s*(?:实际|实际上|实测)?(?:上|已|已经|仅|只)?\s*(?:将|把|使|让)?\s*"
+)
+TARGET_NOUN_RE = re.compile(r"目标(?:用户|人群|客群|客户|市场|院校|企业|商家|读者|受众|岗位|群体|场景|渠道)")
+ACHIEVED_PLAN_RE = re.compile(r"(?:达成|完成|实现|超额|超越|突破)[^，,；;。]{0,6}(?:目标|计划|预期)")
+PLAN_LEFT_RE = re.compile(r"(?:目标|计划|预计|预期|期望|希望|力争|拟将|拟把|拟于|旨在|假设|设想|待验证|尚未|未达)")
+UNMET_RIGHT_RE = re.compile(
+    r"(?:是|为|系|属|作为)[^，,；;。]{0,8}(?:目标|计划|预期|设想)"
+    r"|[（(][^）)]{0,8}(?:目标|计划|预计|预期|设想|待验证)"
+    r"|(?:尚未|未达成|未完成|未实现|未上线|未落地|未达标|未达预期|暂未|待验证|待上线|进行中)"
+)
+UNMET_NEXT_RE = re.compile(r"(?:尚未|未达成|未完成|未实现|未上线|未落地|未达标|未达预期|暂未)")
+PLAN_SUBJ_RE = re.compile(r"^.*?(?:目标|计划|预计|预期|期望|希望|力争|拟|旨在|设想)(?:是|为)?(?:将|把|使|让)?\s*")
+PLAN_CLAUSE_SUBJ_RE = re.compile(
+    r"(?:目标|计划|预计|预期|期望)(?:是|为)?(?:将|把|使|让)\s*([\u4e00-\u9fffA-Za-z]{2,12}?)"
+    r"(?=\s*(?:从|由|" + _UP_DOWN + r"|控制在|达|到))"
+)
+TRUNCATED_TAIL_RE = re.compile(
+    r"^[\d.,+%％/~\-—–+$¥￥€£A-Za-z]"
+    r"|^\s*(?:余|多|美[元金]|港元|港币|欧元|日元|英镑)"
+)
 
 
 class Result(object):
@@ -596,34 +624,121 @@ def _clean_label(text):
     return re.sub(r"\s+", " ", text).strip(" ：:，,")
 
 
+def _has_unit(num_text):
+    return bool(re.sub(r"[\d,.\s]+", "", num_text or ""))
+
+
+def _complete_match(clause, m, kind):
+    """检查匹配到的数值和单位是否完整：数值前后被截断或前后单位缺失时不生成残缺成果块。"""
+    num_group = "a" if kind == "change" else "v"
+    before = clause[:m.start(num_group)].rstrip()
+    if before and before[-1] in "-−+~$¥￥€£.,0123456789":
+        return False
+    if kind == "change":
+        before_b = clause[:m.start("b")].rstrip()
+        if before_b and before_b[-1] in "-−+~$¥￥€£.,0123456789":
+            return False
+        a_unit, b_unit = _has_unit(m.group("a")), _has_unit(m.group("b"))
+        if a_unit and not b_unit:
+            return False
+        if not b_unit and clause[m.end():].strip():
+            return False
+        tail = clause[m.end():]
+    else:
+        tail = clause[m.end("v"):]
+    return not TRUNCATED_TAIL_RE.search(tail)
+
+
+def _mask_safe_targets(s):
+    s = TARGET_NOUN_RE.sub(lambda m: "〇" * len(m.group(0)), s)
+    return ACHIEVED_PLAN_RE.sub(lambda m: "〇" * len(m.group(0)), s)
+
+
+def _is_unachieved(clause, num_start, match_end, next_clause=""):
+    """该数字是否只是目标、预计或尚未达成，而非实际结果。"""
+    masked = _mask_safe_targets(clause)
+    left = masked[:num_start]
+    right = masked[match_end:]
+    if PLAN_LEFT_RE.search(left):
+        last_plan = max(m.end() for m in PLAN_LEFT_RE.finditer(left))
+        if not re.search(r"实际|实测", left[last_plan:]):
+            return True
+    if UNMET_RIGHT_RE.search(right):
+        return True
+    if next_clause:
+        nxt = _mask_safe_targets(next_clause)
+        if UNMET_NEXT_RE.search(nxt) and not re.search(r"实际|实测", nxt):
+            return True
+    return False
+
+
+def _resolve_subject(raw_subj, context_subj):
+    cleaned = _clean_label(raw_subj)
+    if ACTUAL_WORD_RE.search(cleaned):
+        stripped = _clean_label(ACTUAL_LEAD_RE.sub("", cleaned))
+        return stripped or context_subj
+    return cleaned
+
+
+def _extract_plan_subject(raw_subj):
+    cand = _clean_label(PLAN_SUBJ_RE.sub("", (raw_subj or "").strip()))
+    if len(squash(cand)) >= 2 and not any(w in cand for w in PROCESS_WORDS):
+        return cand
+    return ""
+
+
 def find_results(text):
     """从一句要点（已去掉 Markdown 符号的纯文字）里找成果，按在句中的位置返回。"""
     out = []
     if "待确认" in text:
         return out
-    for clause in re.split(r"[，,；;。！!？?]", text):
-        if not clause.strip():
-            continue
+    clauses = [c for c in CLAUSE_SPLIT_RE.split(text) if c.strip()]
+    context_subj = ""
+    for idx, clause in enumerate(clauses):
+        next_clause = clauses[idx + 1] if idx + 1 < len(clauses) else ""
+        pm = PLAN_CLAUSE_SUBJ_RE.search(_mask_safe_targets(clause))
+        if pm:
+            cand = _clean_label(clause[pm.start(1):pm.end(1)])
+            if len(squash(cand)) >= 2 and not any(w in cand for w in PROCESS_WORDS):
+                context_subj = cand
         found = []
         for m in CHANGE_RE.finditer(clause):
-            label = _clean_label(m.group("subj"))
+            if not _complete_match(clause, m, "change"):
+                continue
+            if _is_unachieved(clause, m.start("q"), m.end(), next_clause):
+                context_subj = _extract_plan_subject(m.group("subj")) or context_subj
+                continue
+            label = _resolve_subject(m.group("subj"), context_subj)
             if len(squash(label)) >= 2 and not any(w in label for w in PROCESS_WORDS):
+                context_subj = label
                 a = (m.group("q").strip() + " " + m.group("a").strip()).strip()
                 found.append((m.start("subj") + (len(m.group("subj")) - len(m.group("subj").lstrip())),
                               Result("change", clause[m.start("subj"):m.end()].strip(), "%s → %s" % (a, m.group("b").strip()),
                                      label, 0)))
         if not found:
             for m in RATE_RE.finditer(clause):
-                label = _clean_label(m.group("subj")) + m.group("verb")
+                if not _complete_match(clause, m, "rate"):
+                    continue
+                if _is_unachieved(clause, m.start("verb"), m.end(), next_clause):
+                    context_subj = _extract_plan_subject(m.group("subj")) or context_subj
+                    continue
+                subj = _resolve_subject(m.group("subj"), context_subj)
+                label = subj + m.group("verb") if subj else ""
                 if len(squash(label)) >= 3 and not any(w in label for w in PROCESS_WORDS):
                     found.append((m.start(), Result("rate", clause[m.start("subj"):m.end()].strip(), m.group("v").strip(),
                                                     label, 1)))
         if not found:
             for m in OUTCOME_RE.finditer(clause):
+                if not _complete_match(clause, m, "outcome"):
+                    continue
+                if _is_unachieved(clause, m.start("verb"), m.end(), next_clause):
+                    continue
                 pre = clause[:m.start("verb")]
                 if any(w in pre for w in PROCESS_WORDS):
                     continue
-                label = _clean_label(m.group("pre")) + m.group("verb") + m.group("noun")
+                pre_clean = _clean_label(ACTUAL_LEAD_RE.sub("", _clean_label(m.group("pre")))) if ACTUAL_WORD_RE.search(
+                    m.group("pre")) else _clean_label(m.group("pre"))
+                label = pre_clean + m.group("verb") + m.group("noun")
                 if len(squash(label)) >= 2:
                     found.append((m.start("verb"), Result("outcome", clause[m.start("verb"):m.end()].strip(),
                                                           m.group("v").strip(), label, 2)))
@@ -675,8 +790,11 @@ def _text_segments(html_text):
     return out
 
 
+_ENTITY_OR_NUM_RE = re.compile(r"&(?:#\d+|#x[0-9a-fA-F]+|[A-Za-z][A-Za-z0-9]*);|(\d+(?:[.,]\d+)?(?:\s?[%％])?)")
+
+
 def emphasize(html_text, raw, layout):
-    """按样式给要点加强调，只改标签不改文字：key-bold 把成果原句加粗，num-accent 把数字换强调色。"""
+    """按样式给要点加强调，只改标签不改文字：key-bold 把成果原句加粗，num-accent 把数字换强调色（跳过字符实体）。"""
     if "key-bold" in layout:
         segs = _text_segments(html_text)
         for r in find_results(plain_text(raw)):
@@ -687,8 +805,9 @@ def emphasize(html_text, raw, layout):
                     break
         html_text = "".join(p for _, p in segs)
     if "num-accent" in layout:
-        html_text = "".join(re.sub(r"\d+(?:[.,]\d+)?(?:\s?[%％])?", lambda m: '<span class="num">%s</span>' % m.group(0), p)
-                            if is_text else p for is_text, p in _text_segments(html_text))
+        html_text = "".join(
+            _ENTITY_OR_NUM_RE.sub(lambda m: '<span class="num">%s</span>' % m.group(1) if m.group(1) else m.group(0), p)
+            if is_text else p for is_text, p in _text_segments(html_text))
     return html_text
 
 
@@ -761,6 +880,19 @@ def render_sections(res, warnings, layout=frozenset()):
     return "\n    ".join(main_out), "\n    ".join(side_out)
 
 
+_TIMELINE_RANGE_RE = re.compile(r"\s+(至今|现在)\s*$|\s*((?:至|到)(?!今)|–|—|~)\s*|\s+(to|-)\s+", re.I)
+_TIMELINE_HYPHEN_RE = re.compile(r"-(?=(?:19|20)\d{2}|至今|现在|(?:Present|Now)\b)", re.I)
+
+
+def _break_timeline_date(shown):
+    """时间轴左栏窄，在起止连接符处换行，不拆开 2025-03 这类年月里的连字符，也不把“至今”拆开。"""
+    m = _TIMELINE_RANGE_RE.search(shown)
+    if m:
+        if m.group(1):
+            return shown[:m.start()] + "<br>" + m.group(1)
+        sep = m.group(2) or m.group(3)
+        return shown[:m.start()] + "<br>" + sep + " " + shown[m.end():]
+    return _TIMELINE_HYPHEN_RE.sub("<br>- ", shown, count=1)
 def _inline_title(parts, warnings, lineno):
     first = '<b>%s</b>' % render_inline(parts[0], lineno, warnings, quiet=True)
     return first + "".join('<span class="entry-sub">%s</span>' % render_inline(p, lineno, warnings, quiet=True)
@@ -798,7 +930,7 @@ def _render_section(sec, out, warnings, layout):
         if date:
             shown = render_inline(date, item.lineno, warnings, quiet=True)
             if "timeline" in layout and sec.kind != "education":
-                shown = re.sub(r"\s*(至|到|–|—|-|~)\s*", r"<br>\1 ", shown, count=1)
+                shown = _break_timeline_date(shown)
             date_html = '<p class="entry-date">%s</p>' % shown
         body = _render_items(item.items, para_class, warnings, 6, layout)
         result = entry_result(item) if ("metrics" in layout and sec.kind != "education") else None
@@ -1155,7 +1287,7 @@ def layout_pieces(src_text, res, layout):
     def end_of(start):
         return min(x for x in starts if x > start) - 1
 
-    items, keys, streams = list(base), {}, {}
+    tagged = [(ln, p, None) for ln, p in base]
     if "metrics" in layout:
         entries = [(e, sec) for sec in res.sections for e in sec.items if isinstance(e, Entry)]
         bounds = sorted([e.lineno for e, _ in entries] + starts)
@@ -1166,18 +1298,13 @@ def layout_pieces(src_text, res, layout):
             if not found:
                 continue
             last = min(x for x in bounds if x > e.lineno) - 1
-            at = max([i + 1 for i, (ln, _) in enumerate(items) if ln <= last] or [len(items)])
-            items[at:at] = [(found[1], found[0].value), (found[1], found[0].label)]
+            at = max([i + 1 for i, (ln, _, _) in enumerate(tagged) if ln <= last] or [len(tagged)])
+            rkey = ("result", e.lineno)
+            tagged[at:at] = [(found[1], found[0].value, rkey), (found[1], found[0].label, rkey)]
+    items = [(ln, p) for ln, p, _ in tagged]
+    keys = dict((i, k) for i, (_, _, k) in enumerate(tagged) if k is not None)
+    streams = {}
     pieces = Pieces(items, base.groups)
-    if "metrics" in layout:
-        # 成果的两段各成一组：用条目的“成果”键，和那一行要点本身分开比先后
-        for e, sec in [(e, sec) for sec in res.sections for e in sec.items if isinstance(e, Entry)]:
-            found = entry_result(e) if sec.kind != "education" else None
-            if not found:
-                continue
-            for i, (ln, p) in enumerate(items):
-                if ln == found[1] and p in (found[0].value, found[0].label) and i not in keys:
-                    keys[i] = ("result", e.lineno)
     if "aside" in layout:
         side_lines = set(ln for ln, g in base.groups.items() if g == "header")
         for sec in aside_sections(res, layout):
@@ -1288,10 +1415,14 @@ def compare_text(pieces, page_text, nfkc, template=(), margin=None, strict_strea
     cursor = 0
     stream = None
     stream_end = 0
+    line_end = {}
     for key, ln, group, st in rows:
         if st != stream:
             # 每一栏各自从页面开头找起（侧栏和正文分开比先后）；严格时从上一栏结束处找起
             stream, cursor = st, (stream_end if strict_streams else 0)
+        is_result = isinstance(key, tuple) and len(key) == 2 and key[0] == "result"
+        # 成果块在 HTML 里排在该段经历末尾；PDF 跨页时可能画在第 1 页右栏、早于第 2 页要点，但仍须在本条目头之后、下一条目之前
+        start = cursor if (strict_streams or not is_result) else line_end.get(key[1], cursor)
         absent = [raw for pat, raw in group if pat.search(page) is None]
         if absent:
             for raw in absent:
@@ -1303,14 +1434,17 @@ def compare_text(pieces, page_text, nfkc, template=(), margin=None, strict_strea
         # 组内长的先占位置，短的再找剩下的：“北京大学计算机学院｜计算机”里专业不会落进院名
         found = {}
         for idx, (pat, raw) in sorted(enumerate(group), key=lambda g: -len(g[1][1])):
-            mt = find_free(pat, cursor)
+            mt = find_free(pat, start)
             if mt is None:
                 break
             take(mt, ln)
             found[idx] = mt
         if len(found) == len(group):
-            cursor = min(mt.end() for mt in found.values())
-            stream_end = max([stream_end] + [mt.end() for mt in found.values()])
+            ends = [mt.end() for mt in found.values()]
+            cursor = max([cursor] + ends) if is_result else min(ends)
+            if isinstance(key, int):
+                line_end[key] = max(ends)
+            stream_end = max([stream_end] + ends)
             if key == ln and len(group) > 1:
                 last_is_date = bool(DATE_RE.search(group[-1][1]))
                 fixed = [found[i].start() for i in range(len(group) - (1 if last_is_date else 0))]
@@ -2482,13 +2616,49 @@ def phrase_in(phrase, text):
     return squash(phrase).lower() in squash(text).lower()
 
 
-def check_labels(report, text, where_desc, skip_draft_words=False, sample=False):
+_STYLE_DELIM = r"[\s｜|·•▪◦●■—–\-/:：()（）\[\]【】<>「」『』“”\"'‘’,，。；;！!？?]"
+
+
+def _standalone_style(name, text):
+    """样式名作为独立标签或“样式：xxx”出现，而非嵌在“完成经典单栏布局的可用性测试”这类真实经历句子里。"""
+    pat = re.compile(r"(?:^|" + _STYLE_DELIM + r")" + re.escape(name) + r"(?=$|" + _STYLE_DELIM + r")")
+    if pat.search(text):
+        return True
+    return bool(re.search(r"(?:样式|风格|模板)\s*[:：]?\s*" + re.escape(name), text))
+
+
+def find_style_labels(text, expected=None, template=()):
+    """找出作为内部样式标签出现的样式名：
+    1. 模板自带固定文字里印了样式名且出现在页面/PDF 上；
+    2. 有源稿对照（expected）时，页面/PDF 里样式名的出现次数多于源稿预期（模板或导出额外印出）；
+    3. 样式名在文本里作为独立标签或“样式：xxx”出现。
+    """
+    flat = squash(text, True)
+    tpl_flat = "".join(squash(t, True) for t in (template or ()))
+    exp_flat = "".join(squash(p, True) for _, p in expected) if expected is not None else None
+    found = []
+    for name in STYLE_NAMES:
+        key = squash(name, True)
+        count = flat.count(key)
+        if not count:
+            continue
+        if key in tpl_flat:
+            found.append(name)
+        elif exp_flat is not None and count > exp_flat.count(key):
+            found.append(name)
+        elif _standalone_style(name, text):
+            found.append(name)
+    return found
+
+
+def check_labels(report, text, where_desc, skip_draft_words=False, sample=False, expected=None, template=()):
     """正式稿的用语检查。
 
     skip_draft_words：源稿的空位或演练标记已经报过，页面文字里那些标记的原文不再重复报。
     sample：演练稿里本来就有“虚构”“演练”这类说法，不查也不提醒；草稿用语照查。
     """
-    found = [label for label in INTERNAL_LABELS if phrase_in(label, text)]
+    found = find_style_labels(text, expected=expected, template=template)
+    found += [label for label in INTERNAL_LABELS if phrase_in(label, text) and label not in found]
     found += sorted(set(FACT_ID_RE.findall(text)))
     exp_ids = sorted(set(EXP_ID_RE.findall(text)))
     if exp_ids:
@@ -2513,7 +2683,7 @@ def check_labels(report, text, where_desc, skip_draft_words=False, sample=False)
     return bool(found)
 
 
-def check_final_html(report, page, flagged, sample=False):
+def check_final_html(report, page, flagged, sample=False, expected=None, template=()):
     """正式稿的页面检查。报过的类别记进 flagged，PDF 文字层不再重复报。"""
     issues = False
     plain = len(PENDING_RE.findall(page.clean))
@@ -2554,7 +2724,8 @@ def check_final_html(report, page, flagged, sample=False):
                        "真实投递稿删除这些提示；演练稿保留页面末尾的虚构标记，改用 --final --sample 检查")
         issues = True
     clean = PENDING_RE.sub("", page.clean) if flagged.get("pending") else page.clean
-    issues = check_labels(report, clean, "页面正文", sample=sample) or issues
+    flagged["style_labels"] = set(find_style_labels(clean, expected=expected, template=template))
+    issues = check_labels(report, clean, "页面正文", sample=sample, expected=expected, template=template) or issues
     return issues
 
 
@@ -2674,7 +2845,8 @@ def evaluate_pdf(report, info, max_pages, expected=None, expected_desc="", final
             if diff.order:
                 report.problem("PDF 里这些行的位置和%s不同（例如一条成果挪到了别的经历下）" % expected_desc,
                                "从这里起和源稿对不上：" + describe_lines(diff.order) + "（被挪动的行可能在它们前面）",
-                               "以源稿为准把它们放回原来的经历后重新导出；确实要调整顺序就先改源稿")
+                               "以源稿为准把它们放回原来的经历后重新导出；确实要调整顺序就先改源稿；"
+                               "换过边栏或成果版等样式时，复检加同一个 --style")
             report.check("问题", "文字与源稿一致", "PDF 文字和%s对不上" % expected_desc)
 
     if info.not_embedded:
@@ -2709,7 +2881,14 @@ def evaluate_pdf(report, info, max_pages, expected=None, expected_desc="", final
                            "在源稿末尾加单独一行“---”和一句虚构提示（例如“%s”）后重新导出；"
                            "源稿里有标记却没进 PDF 时，检查页面是否把它隐藏或裁掉了" % SAMPLE_MARK_EXAMPLE)
         if not html_checked:
-            check_labels(report, text, "PDF 文字", skip_draft_words=skip, sample=sample)
+            check_labels(report, text, "PDF 文字", skip_draft_words=skip, sample=sample,
+                         expected=expected, template=template)
+        else:
+            extra_styles = [s for s in find_style_labels(text, expected=expected, template=template)
+                            if s not in flagged.get("style_labels", set())]
+            if extra_styles:
+                report.problem("页面文字里有内部标签或草稿、演练用语：%s" % "、".join("“%s”" % s for s in extra_styles),
+                               "PDF 文字", "删掉模板在正式稿上额外印出的样式名后重新导出")
 
 
 def _radical_problem(report, chars, fonts, examples):
@@ -2958,7 +3137,7 @@ def run_markdown(args, report):
     final_before = len(report.problems)
     if args.final:
         flagged = check_final_source(report, src_text, res, args.sample)
-        check_final_html(report, page, flagged, args.sample)
+        check_final_html(report, page, flagged, args.sample, expected=pieces, template=fixed)
     final_found = len(report.problems) - final_before
 
     data, info, font, layout = print_with_retries(args, report, html_text)
@@ -3088,7 +3267,7 @@ def run_html(args, report):
                 flagged = check_final_source(report, src_text, parse_markdown(src_text), args.sample)
             except CannotRun:
                 report.warn("--source 的源稿结构超出脚本规则，正式稿检查只按页面做")
-        check_final_html(report, page, flagged, args.sample)
+        check_final_html(report, page, flagged, args.sample, expected=pieces, template=fixed)
     final_found = len(report.problems) - final_before
     data, info, font, layout = print_with_retries(args, report, html_text, base_dir=html_path.parent)
     report.fact("页数", page_count_fact(info))

@@ -83,11 +83,11 @@
     .target-role { margin-top: 4pt; font-size: 13pt; font-weight: 600; letter-spacing: 1pt; }
     .meta { margin-top: 5pt; }
     h2 { font-size: 13pt; color: var(--accent); letter-spacing: .5pt; }
-    .resume-section + .resume-section { padding-top: var(--gap-section); border-top: .6pt solid #cebeaa; }
+    .resume-sheet > .resume-section:has(+ .resume-section) { padding-bottom: var(--gap-section); border-bottom: .6pt solid #cebeaa; }
+    .resume-sheet > .resume-section:has(+ .tail) { padding-bottom: var(--gap-section); border-bottom: .9pt solid #a38966; }
     .points li::marker { color: #8a7660; }
-    .tail { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8mm; margin-top: var(--gap-section);
-            padding-top: var(--gap-section); border-top: .9pt solid #a38966; break-inside: avoid; }
-    .tail .resume-section { margin-top: 0; padding-top: 0; border-top: 0; min-width: 0; }
+    .tail { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8mm; margin-top: var(--gap-section); break-inside: avoid; }
+    .tail .resume-section { margin-top: 0; padding: 0; border: 0; min-width: 0; }
     .tail .resume-section + .resume-section { padding-left: 6mm; border-left: .6pt solid #cebeaa; }
     .tail h2 { font-size: 12pt; }
     @media print {
